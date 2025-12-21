@@ -1,0 +1,54 @@
+[project]
+name = "file-knowledge-mcp"
+version = "0.1.0"
+description = "File-first knowledge base MCP server"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Your Name", email = "your@email.com" }
+]
+keywords = ["mcp", "knowledge-base", "search", "pdf", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "mcp>=1.0.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pypdf>=4.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+sync = [
+    "watchfiles>=0.20",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+file-knowledge-mcp = "file_knowledge_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

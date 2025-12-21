@@ -1,0 +1,44 @@
+# file-knowledge-mcp configuration
+
+# Required: path to documents
+knowledge:
+  root: "./documents"
+
+# Optional: server settings
+server:
+  name: "file-knowledge-mcp"
+  log_level: "INFO"  # DEBUG | INFO | WARNING | ERROR
+
+# Optional: search settings
+search:
+  context_lines: 5
+  max_results: 50
+  timeout_seconds: 30
+
+# Optional: exclude patterns
+exclude:
+  patterns:
+    - ".git/*"
+    - "__pycache__/*"
+    - "*.draft.*"
+  hidden_files: true
+
+# Optional: format settings
+formats:
+  pdf:
+    enabled: true
+    filter: "pdftotext - -"
+    extensions: [".pdf"]
+  markdown:
+    enabled: true
+    filter: null
+    extensions: [".md", ".markdown"]
+  text:
+    enabled: true
+    filter: null
+    extensions: [".txt", ".rst"]
+
+# Optional: limits
+limits:
+  max_concurrent_searches: 4
+  max_document_read_chars: 100000
