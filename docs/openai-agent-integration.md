@@ -1,33 +1,34 @@
 # OpenAI Agent SDK Integration
 
-Пошаговое руководство по интеграции file-knowledge-mcp с OpenAI Agent SDK.
+Guide for integrating file-knowledge-mcp with OpenAI Agents SDK.
 
-## Обзор
+## Overview
 
-OpenAI Agent SDK не имеет встроенной поддержки протокола MCP, поэтому требуется промежуточный слой для взаимодействия. Существует два основных подхода:
+OpenAI Agents SDK has **built-in support for the MCP protocol** through the `agents.mcp` module. This means that integrating file-knowledge-mcp requires just a few lines of code without the need to create intermediate layers.
 
-1. **Прямая интеграция через MCP клиент** (рекомендуется) - Python клиент запускает MCP сервер и преобразует его инструменты в OpenAI function calling
-2. **REST API wrapper** - Создать HTTP API поверх MCP сервера
+### Key Features
+
+- ✅ **Native integration** - SDK automatically handles MCP tools
+- ✅ **Automatic conversion** - MCP tools become available to the agent without additional code
+- ✅ **Multiple transports** - stdio, HTTP, SSE
+- ✅ **Tool filtering** - access control for tools
+- ✅ **Streaming** - streaming processing of results
+- ✅ **Prompts** - use dynamic prompts from MCP server
 
 ---
 
-## Подход 1: Прямая интеграция (рекомендуется)
+## Quick Start
 
-Этот подход позволяет OpenAI Agent SDK напрямую использовать инструменты MCP сервера.
-
-### Шаг 1: Установка зависимостей
+### Step 1: Install Dependencies
 
 ```bash
-# Установите MCP сервер
+# Install OpenAI Agents SDK
+pip install openai-agents-python
+
+# Install file-knowledge-mcp
 pip install file-knowledge-mcp
 
-# Установите MCP клиентскую библиотеку
-pip install mcp
-
-# Установите OpenAI SDK
-pip install openai
-
-# Системные зависимости
+# System dependencies
 # Ubuntu/Debian:
 sudo apt install ugrep poppler-utils
 
@@ -35,195 +36,464 @@ sudo apt install ugrep poppler-utils
 brew install ugrep poppler
 ```
 
-### Шаг 2: Создание MCP-OpenAI Bridge
+### Step 2: Basic Integration
 
-Создайте файл `mcp_openai_bridge.py`:
+Create a file `knowledge_bot.py`:
 
 ```python
 import asyncio
-import json
-from typing import Any, Dict, List
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from openai import OpenAI
-
-
-class MCPOpenAIBridge:
-    """Мост между MCP сервером и OpenAI Agent SDK."""
-
-    def __init__(self, knowledge_root: str, openai_api_key: str):
-        self.knowledge_root = knowledge_root
-        self.openai_client = OpenAI(api_key=openai_api_key)
-        self.mcp_session = None
-        self.mcp_tools = []
-
-    async def start(self):
-        """Запускает MCP сервер и получает список инструментов."""
-        server_params = StdioServerParameters(
-            command="file-knowledge-mcp",
-            args=["--root", self.knowledge_root]
-        )
-
-        # Запускаем MCP сервер
-        self.read, self.write = await stdio_client(server_params).__aenter__()
-        self.mcp_session = await ClientSession(self.read, self.write).__aenter__()
-
-        # Инициализируем сессию
-        await self.mcp_session.initialize()
-
-        # Получаем список инструментов
-        tools_list = await self.mcp_session.list_tools()
-        self.mcp_tools = [tool for tool in tools_list]
-
-        print(f"MCP сервер запущен. Доступно инструментов: {len(self.mcp_tools)}")
-
-    async def stop(self):
-        """Останавливает MCP сервер."""
-        if self.mcp_session:
-            await self.mcp_session.__aexit__(None, None, None)
-        if hasattr(self, 'read'):
-            await self.read.__aexit__(None, None, None)
-
-    def get_openai_tools(self) -> List[Dict[str, Any]]:
-        """
-        Преобразует MCP инструменты в формат OpenAI function calling.
-
-        Returns:
-            Список инструментов в формате OpenAI
-        """
-        openai_tools = []
-
-        for tool in self.mcp_tools:
-            openai_tool = {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.inputSchema
-                }
-            }
-            openai_tools.append(openai_tool)
-
-        return openai_tools
-
-    async def call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """
-        Вызывает MCP инструмент.
-
-        Args:
-            tool_name: Имя инструмента
-            arguments: Аргументы для инструмента
-
-        Returns:
-            Результат выполнения инструмента
-        """
-        result = await self.mcp_session.call_tool(tool_name, arguments=arguments)
-        return result
-
-    async def chat(self, messages: List[Dict[str, str]], model: str = "gpt-4"):
-        """
-        Чат с автоматическим вызовом MCP инструментов.
-
-        Args:
-            messages: История сообщений
-            model: Модель OpenAI для использования
-
-        Returns:
-            Ответ ассистента
-        """
-        # Получаем инструменты в формате OpenAI
-        tools = self.get_openai_tools()
-
-        # Создаем запрос к OpenAI
-        response = self.openai_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto"
-        )
-
-        response_message = response.choices[0].message
-        tool_calls = response_message.tool_calls
-
-        # Если модель хочет вызвать инструменты
-        if tool_calls:
-            # Добавляем ответ ассистента в историю
-            messages.append(response_message)
-
-            # Вызываем каждый инструмент
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-
-                print(f"Вызов инструмента: {function_name} с аргументами: {function_args}")
-
-                # Вызываем MCP инструмент
-                function_response = await self.call_mcp_tool(
-                    function_name,
-                    function_args
-                )
-
-                # Добавляем результат в историю
-                messages.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": function_name,
-                    "content": json.dumps(function_response)
-                })
-
-            # Получаем финальный ответ от модели
-            second_response = self.openai_client.chat.completions.create(
-                model=model,
-                messages=messages
-            )
-
-            return second_response.choices[0].message
-
-        return response_message
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
 
 
 async def main():
-    """Пример использования."""
+    """Simple bot with access to local documents."""
 
-    # Инициализируем мост
-    bridge = MCPOpenAIBridge(
-        knowledge_root="./documents",  # Путь к вашим документам
-        openai_api_key="your-openai-api-key"  # Ваш API ключ OpenAI
-    )
+    # Connect to file-knowledge-mcp server
+    async with MCPServerStdio(
+        name="File Knowledge",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./documents"]
+        }
+    ) as server:
+        # Create agent with access to MCP tools
+        agent = Agent(
+            name="Knowledge Assistant",
+            instructions=(
+                "You are an assistant with access to a local knowledge base. "
+                "Use search and document reading tools to answer questions."
+            ),
+            mcp_servers=[server]
+        )
 
-    try:
-        # Запускаем MCP сервер
-        await bridge.start()
+        # Run query
+        result = await Runner.run(
+            agent,
+            "Find information about authentication in the documents"
+        )
 
-        # Создаем диалог
-        messages = [
-            {
-                "role": "user",
-                "content": "Найди в моих документах информацию об аутентификации"
-            }
-        ]
-
-        # Получаем ответ с автоматическим вызовом инструментов
-        response = await bridge.chat(messages, model="gpt-4")
-
-        print(f"\nОтвет ассистента: {response.content}")
-
-    finally:
-        # Останавливаем MCP сервер
-        await bridge.stop()
+        print(result.final_output)
 
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Шаг 3: Настройка конфигурации
+### Step 3: Run
 
-Создайте `config.yaml` для MCP сервера:
+```bash
+# Set OpenAI API key
+export OPENAI_API_KEY=your-openai-api-key
+
+# Run the bot
+python knowledge_bot.py
+```
+
+Done! The agent will automatically get access to all file-knowledge-mcp tools:
+- `search_documents` - search through documents
+- `read_document` - read documents
+- `list_collections` - navigate collections
+- `find_document` - find documents by name
+
+---
+
+## Interactive Bot
+
+Example of a bot with interactive mode:
+
+```python
+import asyncio
+import os
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
+
+
+async def run_interactive_bot():
+    """Interactive bot with local knowledge base."""
+
+    async with MCPServerStdio(
+        name="File Knowledge",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": [
+                "--root", os.path.expanduser("~/Documents"),
+                "--config", "./config.yaml"  # Optional
+            ]
+        }
+    ) as server:
+        agent = Agent(
+            name="Knowledge Assistant",
+            instructions=(
+                "You are a smart assistant with access to user documents. "
+                "Answer questions using information from documents. "
+                "If the needed information is not available, say so honestly."
+            ),
+            model="gpt-4o",  # Use the best model
+            mcp_servers=[server]
+        )
+
+        print("🤖 Bot started! Type 'exit' to quit.\n")
+
+        while True:
+            user_input = input("\n📝 You: ")
+
+            if user_input.lower() in ["exit", "quit"]:
+                print("👋 Goodbye!")
+                break
+
+            if not user_input.strip():
+                continue
+
+            try:
+                result = await Runner.run(agent, user_input)
+                print(f"\n🤖 Bot: {result.final_output}")
+            except Exception as e:
+                print(f"\n❌ Error: {e}")
+
+
+if __name__ == "__main__":
+    asyncio.run(run_interactive_bot())
+```
+
+---
+
+## Advanced Features
+
+### 1. Tool Filtering
+
+Control which tools are available to the agent:
+
+#### Static Filtering
+
+```python
+from agents.mcp import MCPServerStdio, create_static_tool_filter
+
+async with MCPServerStdio(
+    name="File Knowledge (Read Only)",
+    params={
+        "command": "file-knowledge-mcp",
+        "args": ["--root", "./documents"]
+    },
+    # Allow only reading and searching
+    tool_filter=create_static_tool_filter(
+        allowed_tool_names=["search_documents", "read_document"]
+    )
+) as server:
+    agent = Agent(
+        name="Search Assistant",
+        instructions="Help find information in documents.",
+        mcp_servers=[server]
+    )
+```
+
+#### Dynamic Filtering
+
+```python
+from agents.mcp import MCPServerStdio, ToolFilterContext
+
+
+async def context_aware_filter(context: ToolFilterContext, tool) -> bool:
+    """Filter based on agent context."""
+
+    # Restrict access for certain agents
+    if context.agent.name == "Public Assistant":
+        # Public agent can only search
+        return tool.name in ["search_documents", "list_collections"]
+
+    # Other agents have full access
+    return True
+
+
+async with MCPServerStdio(
+    name="File Knowledge",
+    params={
+        "command": "file-knowledge-mcp",
+        "args": ["--root", "./documents"]
+    },
+    tool_filter=context_aware_filter
+) as server:
+    # Create agent with restricted access
+    public_agent = Agent(
+        name="Public Assistant",
+        instructions="Help find publicly available information.",
+        mcp_servers=[server]
+    )
+```
+
+### 2. Caching Tool List
+
+To improve performance with frequent requests:
+
+```python
+async with MCPServerStdio(
+    name="File Knowledge",
+    params={
+        "command": "file-knowledge-mcp",
+        "args": ["--root", "./documents"]
+    },
+    cache_tools_list=True  # Cache the tool list
+) as server:
+    agent = Agent(
+        name="Knowledge Assistant",
+        mcp_servers=[server]
+    )
+```
+
+### 3. Streaming Results
+
+Get results in real-time:
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
+
+
+async def streaming_example():
+    async with MCPServerStdio(
+        name="File Knowledge",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./documents"]
+        }
+    ) as server:
+        agent = Agent(
+            name="Knowledge Assistant",
+            instructions="Answer questions using documents.",
+            mcp_servers=[server]
+        )
+
+        # Run with streaming
+        result = Runner.run_streamed(
+            agent,
+            "Find and summarize all information about security API"
+        )
+
+        # Process events as they arrive
+        async for event in result.stream_events():
+            if event.type == "run_item_stream_event":
+                print(f"📨 {event.item}")
+
+        print(f"\n✅ Summary: {result.final_output}")
+
+
+asyncio.run(streaming_example())
+```
+
+### 4. Using Multiple MCP Servers
+
+Combine file-knowledge-mcp with other servers:
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
+
+
+async def multi_server_example():
+    # Connect file-knowledge-mcp
+    async with MCPServerStdio(
+        name="File Knowledge",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./documents"]
+        }
+    ) as knowledge_server:
+        # Connect filesystem server
+        async with MCPServerStdio(
+            name="Filesystem",
+            params={
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "./workspace"]
+            }
+        ) as fs_server:
+            agent = Agent(
+                name="Multi-tool Assistant",
+                instructions=(
+                    "Use file-knowledge for searching documentation, "
+                    "and filesystem for working with the project."
+                ),
+                mcp_servers=[knowledge_server, fs_server]
+            )
+
+            result = await Runner.run(
+                agent,
+                "Find in the documentation how to implement authentication, "
+                "and create an auth.py file in the project"
+            )
+            print(result.final_output)
+
+
+asyncio.run(multi_server_example())
+```
+
+### 5. Multi-agent workflows
+
+Create specialized agents with different access:
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
+
+
+async def multi_agent_workflow():
+    async with MCPServerStdio(
+        name="File Knowledge",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./documents"]
+        }
+    ) as server:
+        # Researcher agent
+        researcher = Agent(
+            name="Researcher",
+            instructions=(
+                "You are a researcher. Search for information in documents "
+                "and provide detailed facts."
+            ),
+            mcp_servers=[server]
+        )
+
+        # Analyst agent
+        analyst = Agent(
+            name="Analyst",
+            instructions=(
+                "You are an analyst. You receive facts from the researcher "
+                "and make conclusions."
+            ),
+            # Analyst has no direct access to documents
+        )
+
+        # Orchestrator
+        orchestrator = Agent(
+            name="Orchestrator",
+            instructions=(
+                "You are a coordinator. Use researcher to gather facts, "
+                "then analyst for analysis."
+            ),
+            tools=[
+                researcher.as_tool(
+                    tool_name="research",
+                    tool_description="Find information in documents"
+                ),
+                analyst.as_tool(
+                    tool_name="analyze",
+                    tool_description="Analyze information"
+                )
+            ]
+        )
+
+        result = await Runner.run(
+            orchestrator,
+            "Research our security documentation and provide recommendations"
+        )
+        print(result.final_output)
+
+
+asyncio.run(multi_agent_workflow())
+```
+
+---
+
+## HTTP Transport
+
+For production deployments, you can use HTTP instead of stdio:
+
+### Option 1: Streamable HTTP
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerStreamableHttp
+
+
+async def http_integration():
+    async with MCPServerStreamableHttp(
+        name="File Knowledge HTTP",
+        params={
+            "url": "http://localhost:8000/mcp",
+            "headers": {
+                "Authorization": "Bearer your-token-here"
+            },
+            "timeout": 30
+        },
+        cache_tools_list=True,
+        max_retry_attempts=3
+    ) as server:
+        agent = Agent(
+            name="Knowledge Assistant",
+            instructions="Use knowledge from documents.",
+            mcp_servers=[server]
+        )
+
+        result = await Runner.run(agent, "Find information about deployment")
+        print(result.final_output)
+
+
+asyncio.run(http_integration())
+```
+
+### Option 2: Server-Sent Events (SSE)
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerSse
+
+
+async def sse_integration():
+    async with MCPServerSse(
+        name="File Knowledge SSE",
+        params={
+            "url": "http://localhost:8000/sse",
+            "headers": {
+                "X-API-Key": "your-api-key"
+            }
+        },
+        cache_tools_list=True
+    ) as server:
+        agent = Agent(
+            name="Knowledge Assistant",
+            mcp_servers=[server]
+        )
+
+        result = await Runner.run(agent, "Search documents")
+        print(result.final_output)
+
+
+asyncio.run(sse_integration())
+```
+
+**Note**: HTTP transport requires a separate HTTP server wrapping file-knowledge-mcp. Stdio transport is recommended for most cases.
+
+---
+
+## Configuration
+
+### Passing Configuration via Arguments
+
+```python
+async with MCPServerStdio(
+    name="File Knowledge",
+    params={
+        "command": "file-knowledge-mcp",
+        "args": [
+            "--root", "/path/to/documents",
+            "--config", "/path/to/config.yaml"
+        ],
+        "env": {
+            # Override settings via environment variables
+            "FKM_SEARCH__MAX_RESULTS": "100",
+            "FKM_SEARCH__TIMEOUT_SECONDS": "60",
+            "FKM_SECURITY__FILTER_MODE": "whitelist"
+        }
+    }
+) as server:
+    # ...
+```
+
+### Example config.yaml
 
 ```yaml
 knowledge:
-  root: "./documents"  # Путь к вашим документам
+  root: "./documents"
 
 search:
   context_lines: 5
@@ -240,441 +510,381 @@ exclude:
     - ".git/*"
     - "*.bak"
     - "*.tmp"
-```
-
-### Шаг 4: Использование в вашем боте
-
-```python
-import asyncio
-import os
-from mcp_openai_bridge import MCPOpenAIBridge
-
-
-async def run_knowledge_bot():
-    """Запуск бота с доступом к локальным документам."""
-
-    # Создаем мост
-    bridge = MCPOpenAIBridge(
-        knowledge_root="/path/to/your/documents",
-        openai_api_key=os.getenv("OPENAI_API_KEY")
-    )
-
-    try:
-        # Запускаем MCP сервер
-        await bridge.start()
-
-        print("Бот запущен! Доступные инструменты:")
-        for tool in bridge.mcp_tools:
-            print(f"  - {tool.name}: {tool.description}")
-
-        # Интерактивный режим
-        while True:
-            user_input = input("\nВы: ")
-            if user_input.lower() in ["exit", "quit", "выход"]:
-                break
-
-            messages = [{"role": "user", "content": user_input}]
-            response = await bridge.chat(messages, model="gpt-4")
-
-            print(f"Бот: {response.content}")
-
-    finally:
-        await bridge.stop()
-
-
-if __name__ == "__main__":
-    asyncio.run(run_knowledge_bot())
-```
-
-### Шаг 5: Запуск
-
-```bash
-# Установите переменную окружения с API ключом
-export OPENAI_API_KEY=your-openai-api-key
-
-# Запустите бота
-python your_bot.py
+    - "*.draft.*"
 ```
 
 ---
 
-## Подход 2: REST API Wrapper
+## Best Practices
 
-Если вам нужен HTTP интерфейс для интеграции с другими системами.
-
-### Шаг 1: Создание REST API
-
-Создайте `mcp_rest_server.py`:
+### 1. Use Clear Instructions
 
 ```python
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-import asyncio
-from typing import Optional, Dict, Any
-from contextlib import asynccontextmanager
-
-
-# Глобальные переменные для MCP сессии
-mcp_session = None
-mcp_read = None
-mcp_write = None
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения."""
-    global mcp_session, mcp_read, mcp_write
-
-    # Запуск MCP сервера
-    server_params = StdioServerParameters(
-        command="file-knowledge-mcp",
-        args=["--root", "./documents"]
-    )
-
-    mcp_read, mcp_write = await stdio_client(server_params).__aenter__()
-    mcp_session = await ClientSession(mcp_read, mcp_write).__aenter__()
-    await mcp_session.initialize()
-
-    print("MCP сервер запущен")
-
-    yield
-
-    # Остановка MCP сервера
-    if mcp_session:
-        await mcp_session.__aexit__(None, None, None)
-    if mcp_read:
-        await mcp_read.__aexit__(None, None, None)
-
-    print("MCP сервер остановлен")
-
-
-app = FastAPI(title="File Knowledge MCP REST API", lifespan=lifespan)
-
-
-class SearchRequest(BaseModel):
-    query: str
-    collection: Optional[str] = None
-    document: Optional[str] = None
-    max_results: int = 20
-
-
-class ReadRequest(BaseModel):
-    path: str
-    start_page: Optional[int] = None
-    end_page: Optional[int] = None
-
-
-@app.get("/")
-async def root():
-    """Информация об API."""
-    return {
-        "name": "File Knowledge MCP REST API",
-        "version": "1.0.0",
-        "endpoints": [
-            "/search - Поиск по документам",
-            "/collections - Список коллекций",
-            "/read - Чтение документа",
-            "/tools - Список доступных инструментов"
-        ]
-    }
-
-
-@app.get("/tools")
-async def list_tools():
-    """Получить список всех доступных MCP инструментов."""
-    tools = await mcp_session.list_tools()
-    return {
-        "tools": [
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema
-            }
-            for tool in tools
-        ]
-    }
-
-
-@app.post("/search")
-async def search(request: SearchRequest):
-    """Поиск по документам."""
-    scope = {"type": "global"}
-
-    if request.document:
-        scope = {"type": "document", "path": request.document}
-    elif request.collection:
-        scope = {"type": "collection", "path": request.collection}
-
-    try:
-        result = await mcp_session.call_tool(
-            "search_documents",
-            arguments={
-                "query": request.query,
-                "scope": scope,
-                "max_results": request.max_results
-            }
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/collections")
-async def list_collections(path: str = ""):
-    """Список коллекций (папок)."""
-    try:
-        result = await mcp_session.call_tool(
-            "list_collections",
-            arguments={"path": path}
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/read")
-async def read_document(request: ReadRequest):
-    """Чтение документа."""
-    try:
-        args = {"path": request.path}
-        if request.start_page is not None:
-            args["start_page"] = request.start_page
-        if request.end_page is not None:
-            args["end_page"] = request.end_page
-
-        result = await mcp_session.call_tool(
-            "read_document",
-            arguments=args
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-### Шаг 2: Установка зависимостей
-
-```bash
-pip install fastapi uvicorn file-knowledge-mcp mcp
-```
-
-### Шаг 3: Запуск REST сервера
-
-```bash
-# Запустите сервер
-python mcp_rest_server.py
-
-# Сервер будет доступен на http://localhost:8000
-```
-
-### Шаг 4: Использование в OpenAI Agent
-
-```python
-import openai
-import requests
-import json
-
-
-def search_knowledge(query: str, collection: str = None) -> str:
-    """Функция для поиска в базе знаний через REST API."""
-    response = requests.post(
-        "http://localhost:8000/search",
-        json={
-            "query": query,
-            "collection": collection,
-            "max_results": 10
-        }
-    )
-    return json.dumps(response.json())
-
-
-def read_document(path: str) -> str:
-    """Функция для чтения документа через REST API."""
-    response = requests.post(
-        "http://localhost:8000/read",
-        json={"path": path}
-    )
-    return json.dumps(response.json())
-
-
-# Определяем инструменты для OpenAI
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge",
-            "description": "Поиск в базе знаний по запросу",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Поисковый запрос"
-                    },
-                    "collection": {
-                        "type": "string",
-                        "description": "Ограничить поиск коллекцией (опционально)"
-                    }
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_document",
-            "description": "Прочитать содержимое документа",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Путь к документу"
-                    }
-                },
-                "required": ["path"]
-            }
-        }
-    }
-]
-
-# Используем в чате
-client = openai.OpenAI()
-
-messages = [
-    {"role": "user", "content": "Найди информацию об API в моих документах"}
-]
-
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=messages,
-    tools=tools,
-    tool_choice="auto"
+agent = Agent(
+    name="Knowledge Assistant",
+    instructions=(
+        "You are an expert assistant with access to company documentation. "
+        "\n\nRULES:"
+        "\n1. Always search for information in documents before answering"
+        "\n2. If information is not available, say so honestly"
+        "\n3. Cite sources (document names)"
+        "\n4. For complex questions, use multiple searches"
+    ),
+    mcp_servers=[server]
 )
+```
 
-# Обработка вызовов функций
-if response.choices[0].message.tool_calls:
-    for tool_call in response.choices[0].message.tool_calls:
-        if tool_call.function.name == "search_knowledge":
-            args = json.loads(tool_call.function.arguments)
-            result = search_knowledge(**args)
-            print(f"Результат поиска: {result}")
+### 2. Handle Errors
+
+```python
+async def safe_query(agent: Agent, query: str, max_retries: int = 3):
+    """Query with error handling and retries."""
+    for attempt in range(max_retries):
+        try:
+            result = await Runner.run(agent, query)
+            return result.final_output
+        except Exception as e:
+            if attempt == max_retries - 1:
+                return f"Failed to execute query: {e}"
+            print(f"Attempt {attempt + 1} failed, retrying...")
+            await asyncio.sleep(1)
+```
+
+### 3. Limit Search Scope
+
+```python
+# Instead of global search, specify collection
+user_input = "Find information about API in developer documentation"
+
+agent = Agent(
+    name="Dev Assistant",
+    instructions=(
+        "Search for information in 'developers' collection using search_documents tool "
+        "with scope parameter: {type: 'collection', path: 'developers'}"
+    ),
+    mcp_servers=[server]
+)
+```
+
+### 4. Log Actions
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+async def logged_query(agent: Agent, query: str):
+    """Query with logging."""
+    logger.info(f"User query: {query}")
+
+    result = await Runner.run(agent, query)
+
+    logger.info(f"Agent response: {result.final_output}")
+    logger.info(f"Tools used: {[step.tool_name for step in result.steps if step.tool_name]}")
+
+    return result.final_output
+```
+
+### 5. Use Context
+
+```python
+from pydantic import BaseModel
+from agents import RunContextWrapper
+
+
+class UserContext(BaseModel):
+    user_id: str
+    language: str = "en"
+    max_search_results: int = 20
+
+
+async def contextual_agent():
+    context = RunContextWrapper(UserContext(
+        user_id="user_123",
+        language="en",
+        max_search_results=30
+    ))
+
+    async with MCPServerStdio(
+        name="File Knowledge",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./documents"]
+        }
+    ) as server:
+        agent = Agent(
+            name="Contextual Assistant",
+            instructions=(
+                f"Answer in language: {{context.language}}. "
+                f"Use up to {{context.max_search_results}} search results."
+            ),
+            mcp_servers=[server]
+        )
+
+        result = await Runner.run(
+            agent,
+            "Find documentation",
+            context=context.context
+        )
+        print(result.final_output)
 ```
 
 ---
 
-## Сравнение подходов
+## Troubleshooting
 
-| Критерий | Прямая интеграция | REST API |
-|----------|-------------------|----------|
-| Производительность | ⚡ Быстрее (нет HTTP overhead) | 🐌 Медленнее (HTTP запросы) |
-| Простота развертывания | ✅ Один процесс | ❌ Два процесса (API + бот) |
-| Масштабируемость | ❌ Один бот | ✅ Много клиентов |
-| Отладка | ❌ Сложнее | ✅ Проще (можно тестировать curl) |
-| Универсальность | ❌ Только Python | ✅ Любой язык |
+### Issue: MCP Server Won't Start
+
+```bash
+# Check installation
+which file-knowledge-mcp
+
+# Check system dependencies
+which ugrep
+which pdftotext
+
+# Check permissions
+ls -la /path/to/documents
+```
+
+**Solution**: Ensure `file-knowledge-mcp` is installed in PATH and documents are readable.
+
+### Issue: Search Timeout
+
+```python
+# Increase timeout in configuration
+async with MCPServerStdio(
+    name="File Knowledge",
+    params={
+        "command": "file-knowledge-mcp",
+        "args": ["--root", "./documents"],
+        "env": {
+            "FKM_SEARCH__TIMEOUT_SECONDS": "120"
+        }
+    }
+) as server:
+    # ...
+```
+
+### Issue: Agent Can't Find Information
+
+**Possible causes**:
+1. Documents not in supported format (check `.txt`, `.md`, `.pdf`)
+2. Search query too specific
+3. Files excluded via `exclude.patterns`
+
+**Solution**: Check search logs and try a more general query.
+
+### Issue: Permission Denied
+
+```bash
+# Ensure documents are readable
+chmod -R +r /path/to/documents
+
+# Check symlinks
+# If using symlinks, enable in config.yaml:
+# security:
+#   allow_symlinks: true
+```
+
+### Issue: Too Many Results
+
+```python
+# Limit number of results
+async with MCPServerStdio(
+    name="File Knowledge",
+    params={
+        "command": "file-knowledge-mcp",
+        "args": ["--root", "./documents"],
+        "env": {
+            "FKM_SEARCH__MAX_RESULTS": "20"
+        }
+    }
+) as server:
+    # ...
+```
 
 ---
 
-## Рекомендации
+## Docker Deployment
 
-### Для разработки и простых случаев
-Используйте **Прямую интеграцию** - проще в настройке, меньше зависимостей.
+### Production Dockerfile
 
-### Для production и нескольких ботов
-Используйте **REST API** - проще масштабировать и мониторить.
+```dockerfile
+FROM python:3.11-slim
 
----
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    ugrep \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
 
-## Дополнительные возможности
+# Python dependencies
+RUN pip install --no-cache-dir \
+    openai-agents-python \
+    file-knowledge-mcp
 
-### Docker compose для production
+# Working directory
+WORKDIR /app
+
+# Copy code and configuration
+COPY knowledge_bot.py .
+COPY config.yaml .
+
+# Mount point for documents
+VOLUME ["/documents"]
+
+# Environment variables
+ENV OPENAI_API_KEY=""
+ENV FKM_KNOWLEDGE__ROOT="/documents"
+
+CMD ["python", "knowledge_bot.py"]
+```
+
+### docker-compose.yml
 
 ```yaml
 version: "3.8"
 
 services:
-  mcp-rest-api:
+  knowledge-bot:
     build: .
-    ports:
-      - "8000:8000"
     volumes:
-      - ./documents:/knowledge:ro
-    environment:
-      - FKM_KNOWLEDGE__ROOT=/knowledge
-      - FKM_SECURITY__FILTER_MODE=whitelist
-    restart: unless-stopped
-
-  openai-bot:
-    build: ./bot
-    depends_on:
-      - mcp-rest-api
+      - ./documents:/documents:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MCP_API_URL=http://mcp-rest-api:8000
+      - FKM_SECURITY__FILTER_MODE=whitelist
+      - FKM_SEARCH__MAX_RESULTS=50
     restart: unless-stopped
 ```
 
-### Мониторинг и логирование
+---
+
+## Use Cases
+
+### 1. Technical Support
 
 ```python
-import logging
+async def tech_support_bot():
+    async with MCPServerStdio(
+        name="Knowledge Base",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./kb"]
+        }
+    ) as server:
+        agent = Agent(
+            name="Support Agent",
+            instructions=(
+                "You are a technical support agent. "
+                "Help solve user problems using the knowledge base. "
+                "Always provide links to articles from the knowledge base."
+            ),
+            model="gpt-4o",
+            mcp_servers=[server]
+        )
 
-# Настройте логирование
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+        # Interactive support
+        while True:
+            issue = input("\n🆘 Describe the problem: ")
+            if issue.lower() == "exit":
+                break
 
-logger = logging.getLogger(__name__)
+            result = await Runner.run(agent, issue)
+            print(f"\n💡 Solution: {result.final_output}")
+```
 
-# В вашем боте
-logger.info(f"MCP tool called: {tool_name}")
-logger.info(f"Search query: {query}")
+### 2. Code Review Assistant
+
+```python
+async def code_review_assistant():
+    async with MCPServerStdio(
+        name="Coding Standards",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./docs/standards"]
+        }
+    ) as server:
+        agent = Agent(
+            name="Code Reviewer",
+            instructions=(
+                "You are a code reviewer. Check code for compliance with company standards. "
+                "Use documents from the knowledge base to justify comments."
+            ),
+            model="gpt-4o",
+            mcp_servers=[server]
+        )
+
+        code = input("📄 Paste code for review: ")
+        result = await Runner.run(
+            agent,
+            f"Review this code:\n\n{code}"
+        )
+        print(f"\n📝 Review: {result.final_output}")
+```
+
+### 3. Documentation Chatbot
+
+```python
+async def docs_chatbot():
+    async with MCPServerStdio(
+        name="Documentation",
+        params={
+            "command": "file-knowledge-mcp",
+            "args": ["--root", "./docs"]
+        }
+    ) as server:
+        agent = Agent(
+            name="Docs Assistant",
+            instructions=(
+                "You are a documentation assistant. "
+                "Answer questions accurately and concisely. "
+                "Always cite the source of information."
+            ),
+            model="gpt-4o-mini",  # More economical model
+            mcp_servers=[server]
+        )
+
+        print("📚 Documentation loaded. Ask questions!\n")
+
+        while True:
+            question = input("\n❓ Question: ")
+            if question.lower() in ["exit", "quit"]:
+                break
+
+            result = await Runner.run(agent, question)
+            print(f"\n📖 Answer: {result.final_output}")
 ```
 
 ---
 
-## Устранение проблем
+## Comparison with Previous Approach
 
-### MCP сервер не запускается
-```bash
-# Проверьте установку
-which file-knowledge-mcp
-
-# Проверьте системные зависимости
-which ugrep
-which pdftotext
-```
-
-### Timeout ошибки
-Увеличьте таймауты в конфигурации:
-```yaml
-search:
-  timeout_seconds: 60
-
-security:
-  filter_timeout: 45
-```
-
-### Permission denied
-```bash
-# Убедитесь, что документы доступны для чтения
-chmod -R +r /path/to/documents
-```
+| Criterion | Old approach (custom bridge) | New approach (agents.mcp) |
+|----------|------------------------------|---------------------------|
+| Lines of code | ~200 | ~10 |
+| Complexity | High | Low |
+| Maintenance | Requires updates | Supported by SDK |
+| Performance | Medium | High (optimized) |
+| Functionality | Basic | Full (filtering, streaming, etc) |
+| Reliability | Depends on implementation | Production-ready |
 
 ---
 
-## Полезные ссылки
+## Additional Resources
 
-- [MCP Documentation](https://modelcontextprotocol.io/)
-- [OpenAI Function Calling](https://platform.openai.com/docs/guides/function-calling)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [OpenAI Agents SDK Documentation](https://github.com/openai/openai-agents-python)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
 - [file-knowledge-mcp Configuration](configuration.md)
 - [file-knowledge-mcp Tools Reference](tools.md)
+- [OpenAI Function Calling Guide](https://platform.openai.com/docs/guides/function-calling)
+
+---
+
+## Conclusion
+
+Integrating file-knowledge-mcp with OpenAI Agents SDK is now extremely simple thanks to built-in MCP support. Use `MCPServerStdio` for local deployments and `MCPServerStreamableHttp` for production environments.
+
+For questions and suggestions, create issues in the project repository.

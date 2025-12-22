@@ -15,66 +15,64 @@ from ..security import FileAccessControl
 logger = logging.getLogger(__name__)
 
 
-def register_browse_tools(server: Server, config: Config) -> None:
-    """Register browse-related tools."""
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="list_collections",
-                description="""List document collections (folders) at the specified path.
+def get_browse_tools() -> list[Tool]:
+    """Get browse tool definitions."""
+    return [
+        Tool(
+            name="list_collections",
+            description="""List document collections (folders) at the specified path.
 Use this to explore the knowledge base structure.
 Call with empty path to see root collections.""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Path relative to knowledge root. Empty for root.",
-                            "default": "",
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path relative to knowledge root. Empty for root.",
+                        "default": "",
                     },
                 },
-            ),
-            Tool(
-                name="find_document",
-                description="""Find documents by name across all collections.
+            },
+        ),
+        Tool(
+            name="find_document",
+            description="""Find documents by name across all collections.
 Useful when you know the document name but not its location.
 Supports partial matching.""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Document name or part of it",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Max results",
-                            "default": 10,
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Document name or part of it",
                     },
-                    "required": ["query"],
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results",
+                        "default": 10,
+                    },
                 },
-            ),
-        ]
+                "required": ["query"],
+            },
+        ),
+    ]
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        if name == "list_collections":
-            result = await _list_collections(config, arguments.get("path", ""))
-            return [TextContent(type="text", text=format_result(result))]
 
-        elif name == "find_document":
-            result = await _find_document(
-                config,
-                arguments["query"],
-                arguments.get("limit", 10),
-            )
-            return [TextContent(type="text", text=format_result(result))]
+async def handle_browse_tool(name: str, arguments: dict, config: Config) -> list[TextContent]:
+    """Handle browse tool calls."""
+    if name == "list_collections":
+        result = await _list_collections(config, arguments.get("path", ""))
+        return [TextContent(type="text", text=format_result(result))]
 
-        raise ValueError(f"Unknown tool: {name}")
+    elif name == "find_document":
+        result = await _find_document(
+            config,
+            arguments["query"],
+            arguments.get("limit", 10),
+        )
+        return [TextContent(type="text", text=format_result(result))]
+
+    raise ValueError(f"Unknown tool: {name}")
 
 
 async def _list_collections(config: Config, path: str) -> dict:

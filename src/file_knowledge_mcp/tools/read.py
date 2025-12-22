@@ -16,61 +16,59 @@ from ..security import FileAccessControl
 logger = logging.getLogger(__name__)
 
 
-def register_read_tools(server: Server, config: Config) -> None:
-    """Register read-related tools."""
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="read_document",
-                description="""Read full document content or specific pages.
+def get_read_tools() -> list[Tool]:
+    """Get read tool definitions."""
+    return [
+        Tool(
+            name="read_document",
+            description="""Read full document content or specific pages.
 Use as fallback when search doesn't find what you need.
 WARNING: Can return large amounts of text, prefer search when possible.""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Path to document (relative to knowledge root)",
-                        },
-                        "pages": {
-                            "type": "array",
-                            "items": {"type": "integer"},
-                            "description": "Specific pages to read (1-indexed). Empty = all.",
-                            "default": [],
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to document (relative to knowledge root)",
                     },
-                    "required": ["path"],
+                    "pages": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Specific pages to read (1-indexed). Empty = all.",
+                        "default": [],
+                    },
                 },
-            ),
-            Tool(
-                name="get_document_info",
-                description="""Get document metadata including size, page count, and TOC.
+                "required": ["path"],
+            },
+        ),
+        Tool(
+            name="get_document_info",
+            description="""Get document metadata including size, page count, and TOC.
 TOC is only available for PDFs with embedded bookmarks.""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Path to document",
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to document",
                     },
-                    "required": ["path"],
                 },
-            ),
-        ]
+                "required": ["path"],
+            },
+        ),
+    ]
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        if name == "read_document":
-            result = await _read_document(config, arguments)
-            return [TextContent(type="text", text=format_result(result))]
-        elif name == "get_document_info":
-            result = await _get_document_info(config, arguments)
-            return [TextContent(type="text", text=format_result(result))]
 
-        raise ValueError(f"Unknown tool: {name}")
+async def handle_read_tool(name: str, arguments: dict, config: Config) -> list[TextContent]:
+    """Handle read tool calls."""
+    if name == "read_document":
+        result = await _read_document(config, arguments)
+        return [TextContent(type="text", text=format_result(result))]
+    elif name == "get_document_info":
+        result = await _get_document_info(config, arguments)
+        return [TextContent(type="text", text=format_result(result))]
+
+    raise ValueError(f"Unknown tool: {name}")
 
 
 async def _read_document(config: Config, args: dict) -> dict:

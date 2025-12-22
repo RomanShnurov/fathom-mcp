@@ -10,7 +10,7 @@ from .search.ugrep import check_ugrep_installed
 from .server import run_server
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="File-first knowledge base MCP server")
     parser.add_argument(

@@ -13,17 +13,12 @@ from ..security import FileAccessControl
 logger = logging.getLogger(__name__)
 
 
-def register_search_tools(server: Server, config: Config) -> None:
-    """Register search-related tools."""
-
-    engine = UgrepEngine(config)
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="search_documents",
-                description="""Search for text inside documents using boolean patterns.
+def get_search_tools() -> list[Tool]:
+    """Get search tool definitions."""
+    return [
+        Tool(
+            name="search_documents",
+            description="""Search for text inside documents using boolean patterns.
 
 Query syntax:
 - Space between words = AND: "attack armor" finds both terms
@@ -35,91 +30,94 @@ Scope controls where to search:
 - "global": search everywhere
 - "collection": search in specific collection (recursive)
 - "document": search in specific document""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query with boolean operators",
-                        },
-                        "scope": {
-                            "type": "object",
-                            "description": "Where to search",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "enum": ["global", "collection", "document"],
-                                },
-                                "path": {
-                                    "type": "string",
-                                    "description": "Path for collection/document scope",
-                                },
-                            },
-                            "required": ["type"],
-                        },
-                        "context_lines": {
-                            "type": "integer",
-                            "description": "Lines of context around matches",
-                            "default": 5,
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum matches to return",
-                            "default": 20,
-                        },
-                        "fuzzy": {
-                            "type": "boolean",
-                            "description": "Enable fuzzy matching",
-                            "default": False,
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query with boolean operators",
                     },
-                    "required": ["query", "scope"],
+                    "scope": {
+                        "type": "object",
+                        "description": "Where to search",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["global", "collection", "document"],
+                            },
+                            "path": {
+                                "type": "string",
+                                "description": "Path for collection/document scope",
+                            },
+                        },
+                        "required": ["type"],
+                    },
+                    "context_lines": {
+                        "type": "integer",
+                        "description": "Lines of context around matches",
+                        "default": 5,
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum matches to return",
+                        "default": 20,
+                    },
+                    "fuzzy": {
+                        "type": "boolean",
+                        "description": "Enable fuzzy matching",
+                        "default": False,
+                    },
                 },
-            ),
-            Tool(
-                name="search_multiple",
-                description="""Search for multiple terms in parallel within a document.
+                "required": ["query", "scope"],
+            },
+        ),
+        Tool(
+            name="search_multiple",
+            description="""Search for multiple terms in parallel within a document.
 More efficient than calling search_documents multiple times.
 Useful for complex questions involving several concepts.
 
 Each term can use boolean syntax (space=AND, |=OR, -=NOT).""",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "document_path": {
-                            "type": "string",
-                            "description": "Path to document",
-                        },
-                        "terms": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of search terms (max 10)",
-                            "maxItems": 10,
-                        },
-                        "context_lines": {
-                            "type": "integer",
-                            "default": 5,
-                        },
-                        "fuzzy": {
-                            "type": "boolean",
-                            "default": False,
-                        },
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "document_path": {
+                        "type": "string",
+                        "description": "Path to document",
                     },
-                    "required": ["document_path", "terms"],
+                    "terms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of search terms (max 10)",
+                        "maxItems": 10,
+                    },
+                    "context_lines": {
+                        "type": "integer",
+                        "default": 5,
+                    },
+                    "fuzzy": {
+                        "type": "boolean",
+                        "default": False,
+                    },
                 },
-            ),
-        ]
+                "required": ["document_path", "terms"],
+            },
+        ),
+    ]
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        if name == "search_documents":
-            result = await _search_documents(config, engine, arguments)
-            return [TextContent(type="text", text=format_result(result))]
-        elif name == "search_multiple":
-            result = await _search_multiple(config, engine, arguments)
-            return [TextContent(type="text", text=format_result(result))]
 
-        raise ValueError(f"Unknown tool: {name}")
+async def handle_search_tool(name: str, arguments: dict, config: Config) -> list[TextContent]:
+    """Handle search tool calls."""
+    engine = UgrepEngine(config)
+
+    if name == "search_documents":
+        result = await _search_documents(config, engine, arguments)
+        return [TextContent(type="text", text=format_result(result))]
+    elif name == "search_multiple":
+        result = await _search_multiple(config, engine, arguments)
+        return [TextContent(type="text", text=format_result(result))]
+
+    raise ValueError(f"Unknown tool: {name}")
 
 
 async def _search_documents(config: Config, engine: UgrepEngine, args: dict) -> dict:
