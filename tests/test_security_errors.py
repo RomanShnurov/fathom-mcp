@@ -45,6 +45,10 @@ class TestFileAccessControlErrors:
         except OSError:
             pytest.skip("Cannot create symlinks on this system")
 
+        # Verify symlink was created
+        if not symlink.exists() or not symlink.is_symlink():
+            pytest.skip("Symlink creation failed or not detected")
+
         with pytest.raises(McpError) as exc_info:
             fac.validate_path("link.txt")
 
@@ -134,7 +138,7 @@ class TestFilterSecurityErrors:
             security=SecurityConfig(
                 filter_security_mode="whitelist",
                 allowed_filter_commands=["sleep 10", "sleep"],
-                filter_timeout_seconds=1,  # 1 second
+                filter_timeout_seconds=5,  # 5 seconds (minimum allowed)
             ),
         )
         fs = FilterSecurity(config)
