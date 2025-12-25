@@ -1,5 +1,5 @@
 # Multi-stage build for smaller image
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -20,7 +20,7 @@ RUN uv venv /app/.venv
 RUN . /app/.venv/bin/activate && uv sync --frozen
 
 # --- Runtime stage ---
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
