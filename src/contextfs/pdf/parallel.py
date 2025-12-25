@@ -138,9 +138,8 @@ class ParallelPDFProcessor:
         pdf_meta, toc = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Handle results
-        if not isinstance(pdf_meta, Exception) and pdf_meta:
-            if isinstance(pdf_meta, dict):
-                metadata.update(pdf_meta)
+        if not isinstance(pdf_meta, Exception) and pdf_meta and isinstance(pdf_meta, dict):
+            metadata.update(pdf_meta)
 
         if not isinstance(toc, Exception) and toc:
             metadata["has_toc"] = True
