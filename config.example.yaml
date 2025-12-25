@@ -1,4 +1,4 @@
-# file-knowledge-mcp configuration
+# ContextFS configuration
 
 # Required: path to documents
 knowledge:
@@ -6,7 +6,7 @@ knowledge:
 
 # Optional: server settings
 server:
-  name: "file-knowledge-mcp"
+  name: "ContextFS"
   log_level: "INFO"  # DEBUG | INFO | WARNING | ERROR
 
 # Optional: search settings
@@ -49,7 +49,7 @@ performance:
   enable_indexing: false               # Enable document indexing
   index_update_strategy: "auto"        # auto | manual | scheduled
   index_formats: [".pdf", ".md", ".txt"]  # File formats to include in index
-  index_path: ".fkm_index"             # Index storage path (relative to knowledge root)
+  index_path: ".cfs_index"             # Index storage path (relative to knowledge root)
   rebuild_index_on_startup: false      # Rebuild index when server starts
 
   # File watching for automatic index updates
@@ -94,12 +94,12 @@ security:
   follow_symlinks: false            # Disallow following symbolic links
 
 # Environment variable overrides:
-# All settings can be overridden using environment variables with FKM_ prefix
+# All settings can be overridden using environment variables with CFS_ prefix
 # Examples:
-#   FKM_KNOWLEDGE__ROOT=/path/to/docs
-#   FKM_SECURITY__ENABLE_SHELL_FILTERS=false
-#   FKM_SECURITY__FILTER_SECURITY_MODE=disabled
-#   FKM_SEARCH__MAX_RESULTS=100
-#   FKM_PERFORMANCE__ENABLE_INDEXING=true
-#   FKM_PERFORMANCE__ENABLE_FILE_WATCHING=true
-#   FKM_PERFORMANCE__ENABLE_PARALLEL_PDF=false
+#   CFS_KNOWLEDGE__ROOT=/path/to/docs
+#   CFS_SECURITY__ENABLE_SHELL_FILTERS=false
+#   CFS_SECURITY__FILTER_SECURITY_MODE=disabled
+#   CFS_SEARCH__MAX_RESULTS=100
+#   CFS_PERFORMANCE__ENABLE_INDEXING=true
+#   CFS_PERFORMANCE__ENABLE_FILE_WATCHING=true
+#   CFS_PERFORMANCE__ENABLE_PARALLEL_PDF=false

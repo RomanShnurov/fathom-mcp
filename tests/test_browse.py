@@ -2,7 +2,7 @@
 
 import pytest
 
-from file_knowledge_mcp.tools.browse import _find_document, _list_collections
+from contextfs.tools.browse import _find_document, _list_collections
 
 
 @pytest.mark.asyncio

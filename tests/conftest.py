@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from file_knowledge_mcp.config import Config, KnowledgeConfig
-from file_knowledge_mcp.search.ugrep import UgrepEngine
+from contextfs.config import Config, KnowledgeConfig
+from contextfs.search.ugrep import UgrepEngine
 
 
 @pytest.fixture

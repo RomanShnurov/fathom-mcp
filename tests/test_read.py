@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from file_knowledge_mcp.errors import ErrorCode, McpError
-from file_knowledge_mcp.tools.read import _get_document_info, _read_document
+from contextfs.errors import ErrorCode, McpError
+from contextfs.tools.read import _get_document_info, _read_document
 
 
 @pytest.mark.asyncio

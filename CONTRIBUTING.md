@@ -1,6 +1,6 @@
-# Contributing to file-knowledge-mcp
+# Contributing to contextfs
 
-Thank you for your interest in contributing to file-knowledge-mcp! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to contextfs! This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 
@@ -21,8 +21,8 @@ This project follows a standard code of conduct. Please be respectful and profes
 1. **Fork and clone the repository:**
 
 ```bash
-git clone https://github.com/yourusername/file-knowledge-mcp.git
-cd file-knowledge-mcp
+git clone https://github.com/yourusername/contextfs.git
+cd contextfs
 ```
 
 2. **Install system dependencies:**
@@ -68,7 +68,7 @@ uv run mypy src
 ### Project Structure
 
 ```
-file-knowledge-mcp/
+contextfs/
 ├── src/file_knowledge_mcp/     # Main package
 │   ├── __init__.py
 │   ├── __main__.py             # CLI entry point
@@ -564,4 +564,4 @@ Contributors will be recognized in:
 - Release notes
 - CHANGELOG.md (for significant contributions)
 
-Thank you for contributing to file-knowledge-mcp!
+Thank you for contributing to contextfs!

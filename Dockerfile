@@ -44,11 +44,11 @@ ENV PYTHONPATH="/home/app"
 
 # Default knowledge directory (read-only recommended)
 VOLUME /knowledge
-ENV FKM_KNOWLEDGE__ROOT=/knowledge
+ENV CFS_KNOWLEDGE__ROOT=/knowledge
 
 # Config mount point
 VOLUME /config
 
 # Entry point
-ENTRYPOINT ["python", "-m", "file_knowledge_mcp"]
+ENTRYPOINT ["python", "-m", "contextfs"]
 CMD ["--config", "/config/config.yaml"]

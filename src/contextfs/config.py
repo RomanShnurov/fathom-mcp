@@ -167,7 +167,7 @@ class SecurityConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Server metadata."""
 
-    name: str = "file-knowledge-mcp"
+    name: str = "ContextFS"
     version: str = "0.1.0"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
@@ -192,7 +192,7 @@ class Config(BaseSettings):
     """Main configuration."""
 
     model_config = SettingsConfigDict(
-        env_prefix="FKM_",
+        env_prefix="CFS_",
         env_nested_delimiter="__",
     )
 

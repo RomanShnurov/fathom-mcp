@@ -2,7 +2,7 @@
 
 import pytest
 
-from file_knowledge_mcp.prompts import (
+from contextfs.prompts import (
     _answer_question_prompt,
     _compare_documents_prompt,
     _summarize_document_prompt,

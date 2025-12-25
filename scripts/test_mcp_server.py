@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Interactive test script for file-knowledge-mcp server.
+Interactive test script for contextfs server.
 Tests all MCP tools by sending JSON-RPC requests via stdio.
 """
 
@@ -23,7 +23,7 @@ class MCPClient:
         self.process = await asyncio.create_subprocess_exec(
             "uv",
             "run",
-            "file-knowledge-mcp",
+            "contextfs",
             "--config",
             config_path,
             stdin=asyncio.subprocess.PIPE,
@@ -280,7 +280,7 @@ async def run_tests():
 if __name__ == "__main__":
     print("""
 ╔══════════════════════════════════════════════════════════╗
-║         File Knowledge MCP Server - Test Suite          ║
+║         ContextFS - Test Suite          ║
 ╚══════════════════════════════════════════════════════════╝
 """)
     asyncio.run(run_tests())

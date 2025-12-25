@@ -52,8 +52,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t file-knowledge-mcp .
+        run: docker build -t contextfs .
 
       - name: Test Docker image
         run: |
-          docker run --rm file-knowledge-mcp --help
+          docker run --rm contextfs --help

@@ -1,10 +1,10 @@
 version: "3.8"
 
 services:
-  file-knowledge-mcp:
+  contextfs:
     build:
       context: .
-    image: file-knowledge-mcp:latest
+    image: contextfs:latest
     volumes:
       # Mount documents as read-only for security
       - ./documents:/knowledge:ro

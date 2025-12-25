@@ -9,7 +9,7 @@ Complete reference for all configuration options.
 Configuration is loaded in this priority order:
 
 1. **CLI arguments** (`--root`, `--log-level`)
-2. **Environment variables** (prefix `FKM_`)
+2. **Environment variables** (prefix `CFS_`)
 3. **Config file** (`config.yaml`)
 4. **Defaults**
 
@@ -19,10 +19,10 @@ All config options can be set via environment variables:
 
 ```bash
 # Nested keys use double underscore
-FKM_KNOWLEDGE__ROOT=/data/docs
-FKM_SERVER__LOG_LEVEL=DEBUG
-FKM_SEARCH__MAX_RESULTS=100
-FKM_SECURITY__FILTER_MODE=whitelist
+CFS_KNOWLEDGE__ROOT=/data/docs
+CFS_SERVER__LOG_LEVEL=DEBUG
+CFS_SEARCH__MAX_RESULTS=100
+CFS_SECURITY__FILTER_MODE=whitelist
 ```
 
 ---
@@ -52,7 +52,7 @@ knowledge:
 # === SERVER ===
 
 server:
-  name: "file-knowledge-mcp" # Server name (shown in MCP clients)
+  name: "contextfs" # Server name (shown in MCP clients)
   version: "0.1.0"           # Server version
   log_level: "INFO"          # DEBUG | INFO | WARNING | ERROR
 
@@ -151,7 +151,7 @@ security:
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `name` | string | No | `file-knowledge-mcp` | Server name |
+| `name` | string | No | `contextfs` | Server name |
 | `version` | string | No | `0.1.0` | Server version |
 | `log_level` | enum | No | `INFO` | Log level: DEBUG, INFO, WARNING, ERROR |
 
@@ -360,13 +360,13 @@ CLI arguments override config file:
 
 ```bash
 # Override root
-file-knowledge-mcp --root /other/path
+contextfs --root /other/path
 
 # Override log level
-file-knowledge-mcp --log-level DEBUG
+contextfs --log-level DEBUG
 
 # Both
-file-knowledge-mcp --config prod.yaml --log-level DEBUG
+contextfs --config prod.yaml --log-level DEBUG
 ```
 
 ---

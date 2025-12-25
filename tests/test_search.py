@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from file_knowledge_mcp.errors import ErrorCode, McpError
-from file_knowledge_mcp.search.ugrep import SearchResult, UgrepEngine
-from file_knowledge_mcp.tools.search import _search_documents, _search_multiple
+from contextfs.errors import ErrorCode, McpError
+from contextfs.search.ugrep import SearchResult, UgrepEngine
+from contextfs.tools.search import _search_documents, _search_multiple
 
 # Enable debug logging for tests
 logging.basicConfig(level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s")

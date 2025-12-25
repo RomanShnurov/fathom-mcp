@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from file_knowledge_mcp.search.cache import SearchCache, SmartSearchCache
-from file_knowledge_mcp.search.ugrep import SearchResult, UgrepEngine
+from contextfs.search.cache import SearchCache, SmartSearchCache
+from contextfs.search.ugrep import SearchResult, UgrepEngine
 
 # ============================================================================
 # SearchCache Tests

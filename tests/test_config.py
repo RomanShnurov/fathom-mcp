@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from file_knowledge_mcp.config import Config, ConfigError, KnowledgeConfig, load_config
+from contextfs.config import Config, ConfigError, KnowledgeConfig, load_config
 
 
 def test_knowledge_config_validation():
@@ -27,7 +27,7 @@ def test_config_defaults():
     with tempfile.TemporaryDirectory() as tmpdir:
         config = Config(knowledge=KnowledgeConfig(root=tmpdir))
 
-        assert config.server.name == "file-knowledge-mcp"
+        assert config.server.name == "ContextFS"
         assert config.server.log_level == "INFO"
         assert config.search.context_lines == 5
         assert config.search.max_results == 50

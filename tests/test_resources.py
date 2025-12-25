@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from file_knowledge_mcp.resources import (
+from contextfs.resources import (
     _get_collection_index,
     _get_document_info_resource,
     _get_root_index,

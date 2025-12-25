@@ -1,6 +1,6 @@
 # Tools Reference
 
-Detailed documentation for all MCP tools provided by the file-knowledge-mcp server.
+Detailed documentation for all MCP tools provided by the contextfs server.
 
 ---
 

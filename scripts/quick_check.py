@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quick health check for file-knowledge-mcp server.
+Quick health check for contextfs server.
 Just verifies the server starts and responds to basic requests.
 """
 
@@ -29,7 +29,7 @@ def check_server_startup():
         # Start server process
         # Note: MCP server will exit when stdin closes, which is normal behavior
         process = subprocess.Popen(
-            ["uv", "run", "file-knowledge-mcp", "--config", "config.yaml"],
+            ["uv", "run", "contextfs", "--config", "config.yaml"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,  # Provide stdin
@@ -48,7 +48,7 @@ def check_server_startup():
             stdout, stderr = process.communicate()
 
         # Check if server initialized successfully by looking for success messages in logs
-        if "Server 'file-knowledge-mcp' created" in stderr and "Starting MCP server" in stderr:
+        if "Server 'contextfs' created" in stderr and "Starting MCP server" in stderr:
             print("✅ Server initialized successfully")
             return True
         elif "ERROR" in stderr or "Traceback" in stderr:
@@ -70,7 +70,7 @@ def main():
     """Run all health checks."""
     print("""
 ╔══════════════════════════════════════════════════════════╗
-║    File Knowledge MCP Server - Quick Health Check       ║
+║    ContextFS - Quick Health Check       ║
 ╚══════════════════════════════════════════════════════════╝
 """)
 
@@ -138,7 +138,7 @@ def main():
         print("✅ All checks passed! Server is ready to use.")
         print("\nNext steps:")
         print("  1. Configure Claude Desktop (see TESTING_GUIDE.md)")
-        print("  2. Or use MCP Inspector: mcp-inspector uv run file-knowledge-mcp")
+        print("  2. Or use MCP Inspector: mcp-inspector uv run contextfs")
         print("  3. Or run pytest tests: uv run pytest")
     else:
         print("❌ Some checks failed. Please fix the issues above.")

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from file_knowledge_mcp.config import Config, KnowledgeConfig, SecurityConfig
-from file_knowledge_mcp.errors import ErrorCode, McpError
-from file_knowledge_mcp.security import FileAccessControl, FilterSecurity
+from contextfs.config import Config, KnowledgeConfig, SecurityConfig
+from contextfs.errors import ErrorCode, McpError
+from contextfs.security import FileAccessControl, FilterSecurity
 
 
 class TestFileAccessControlErrors:

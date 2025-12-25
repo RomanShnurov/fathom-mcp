@@ -1,4 +1,4 @@
-# File Knowledge MCP Server
+# ContextFS
 
 A Model Context Protocol server that provides AI assistants with direct access to local document collections through file-first search capabilities.
 
@@ -44,7 +44,7 @@ brew install ugrep poppler
 ### Installing via pip
 
 ```bash
-pip install file-knowledge-mcp
+pip install contextfs
 ```
 
 ## Collections and Scope
@@ -64,7 +64,7 @@ The knowledge root can be specified via:
 
 **Command-line argument** (recommended for static setups):
 ```bash
-file-knowledge-mcp --root /path/to/documents
+contextfs --root /path/to/documents
 ```
 
 **Configuration file**:
@@ -75,7 +75,7 @@ knowledge:
 
 **Environment variable**:
 ```bash
-export FKM_KNOWLEDGE__ROOT=/path/to/documents
+export CFS_KNOWLEDGE__ROOT=/path/to/documents
 ```
 
 ### Search Scopes
@@ -118,12 +118,12 @@ See [config.example.yaml](config.example.yaml) for all available options.
 
 ### Environment Variables
 
-All configuration options can be overridden using environment variables with the `FKM_` prefix:
+All configuration options can be overridden using environment variables with the `CFS_` prefix:
 
 ```bash
-export FKM_KNOWLEDGE__ROOT=/path/to/documents
-export FKM_SEARCH__MAX_RESULTS=100
-export FKM_SECURITY__FILTER_MODE=whitelist
+export CFS_KNOWLEDGE__ROOT=/path/to/documents
+export CFS_SEARCH__MAX_RESULTS=100
+export CFS_SECURITY__FILTER_MODE=whitelist
 ```
 
 Use double underscores (`__`) to denote nested configuration levels.
@@ -322,8 +322,8 @@ Add this to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "file-knowledge": {
-      "command": "file-knowledge-mcp",
+    "contextfs": {
+      "command": "contextfs",
       "args": ["--root", "/path/to/your/documents"]
     }
   }
@@ -337,8 +337,8 @@ For more complex setups, use a configuration file:
 ```json
 {
   "mcpServers": {
-    "file-knowledge": {
-      "command": "file-knowledge-mcp",
+    "contextfs": {
+      "command": "contextfs",
       "args": ["--config", "/path/to/config.yaml"]
     }
   }
@@ -352,13 +352,13 @@ When developing or running from source:
 ```json
 {
   "mcpServers": {
-    "file-knowledge": {
+    "contextfs": {
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/file-knowledge-mcp",
+        "/path/to/contextfs",
         "run",
-        "file-knowledge-mcp",
+        "contextfs",
         "--root",
         "/path/to/documents"
       ]
@@ -399,16 +399,16 @@ The included `docker-compose.yaml` provides:
 
 ```bash
 # Build image
-docker build -t file-knowledge-mcp .
+docker build -t contextfs .
 
 # Run with read-only mount
-docker run -v /path/to/docs:/knowledge:ro file-knowledge-mcp
+docker run -v /path/to/docs:/knowledge:ro contextfs
 
 # Run with custom configuration
 docker run \
   -v /path/to/docs:/knowledge:ro \
   -v /path/to/config.yaml:/config/config.yaml:ro \
-  file-knowledge-mcp
+  contextfs
 ```
 
 ## Cloud Storage Integration
@@ -443,8 +443,8 @@ See [`docs/cloud-sync-guide.md`](docs/cloud-sync-guide.md) for detailed setup in
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/file-knowledge-mcp
-cd file-knowledge-mcp
+git clone https://github.com/yourusername/contextfs
+cd contextfs
 
 # Install with development dependencies (recommended)
 uv sync --extra dev
@@ -515,7 +515,7 @@ security:
 Since MCP servers run over stdio, debugging can be challenging. For the best debugging experience, I recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
-npx @modelcontextprotocol/inspector file-knowledge-mcp --root /path/to/documents
+npx @modelcontextprotocol/inspector contextfs --root /path/to/documents
 ```
 
 The Inspector provides:
@@ -527,7 +527,7 @@ The Inspector provides:
 You can also use the MCP Inspector to test different configurations:
 
 ```bash
-npx @modelcontextprotocol/inspector file-knowledge-mcp --config config.yaml
+npx @modelcontextprotocol/inspector contextfs --config config.yaml
 ```
 
 ## Contributing

@@ -1,6 +1,6 @@
 # Integration Guide
 
-How to integrate file-knowledge-mcp with various MCP clients and applications.
+How to integrate contextfs with various MCP clients and applications.
 
 ---
 
@@ -35,7 +35,7 @@ Add this to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "knowledge": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "/path/to/your/documents"]
     }
   }
@@ -53,9 +53,9 @@ If you're running from source with uv:
       "command": "uv",
       "args": [
         "--directory",
-        "/absolute/path/to/file-knowledge-mcp",
+        "/absolute/path/to/contextfs",
         "run",
-        "file-knowledge-mcp",
+        "contextfs",
         "--root",
         "/path/to/documents"
       ]
@@ -72,7 +72,7 @@ Point to a configuration file instead of passing CLI arguments:
 {
   "mcpServers": {
     "knowledge": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--config", "/path/to/config.yaml"]
     }
   }
@@ -87,15 +87,15 @@ You can configure multiple knowledge bases with different scopes:
 {
   "mcpServers": {
     "work-docs": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "~/Documents/Work"]
     },
     "personal-notes": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "~/Documents/Personal"]
     },
     "research": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "~/Research/Papers"]
     }
   }
@@ -110,12 +110,12 @@ Set environment variables for configuration:
 {
   "mcpServers": {
     "knowledge": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "/path/to/documents"],
       "env": {
-        "FKM_SEARCH__MAX_RESULTS": "100",
-        "FKM_SEARCH__CONTEXT_LINES": "10",
-        "FKM_SECURITY__FILTER_MODE": "whitelist"
+        "CFS_SEARCH__MAX_RESULTS": "100",
+        "CFS_SEARCH__CONTEXT_LINES": "10",
+        "CFS_SECURITY__FILTER_MODE": "whitelist"
       }
     }
   }
@@ -193,7 +193,7 @@ from mcp.client.stdio import stdio_client
 
 async def main():
     server_params = StdioServerParameters(
-        command="file-knowledge-mcp",
+        command="contextfs",
         args=["--root", "./documents"],
         env=None
     )
@@ -238,7 +238,7 @@ from mcp.client.stdio import stdio_client
 async def search_knowledge(query: str, scope_path: str = ""):
     """Search the knowledge base and return results."""
     server_params = StdioServerParameters(
-        command="file-knowledge-mcp",
+        command="contextfs",
         args=["--root", "./documents"]
     )
 
@@ -291,7 +291,7 @@ Run the MCP server in a Docker container.
 ```bash
 docker run -i \
   -v /path/to/documents:/knowledge:ro \
-  file-knowledge-mcp
+  contextfs
 ```
 
 ### Docker Compose
@@ -302,8 +302,8 @@ Create `docker-compose.yaml`:
 version: "3.8"
 
 services:
-  file-knowledge-mcp:
-    image: file-knowledge-mcp:latest
+  contextfs:
+    image: contextfs:latest
     stdin_open: true
     tty: true
     volumes:
@@ -331,7 +331,7 @@ Configure Claude Desktop to use the Docker container:
         "--rm",
         "-v",
         "/path/to/documents:/knowledge:ro",
-        "file-knowledge-mcp"
+        "contextfs"
       ]
     }
   }
@@ -363,7 +363,7 @@ class SearchRequest(BaseModel):
 async def call_mcp_tool(tool_name: str, arguments: dict):
     """Call an MCP tool and return results."""
     server_params = StdioServerParameters(
-        command="file-knowledge-mcp",
+        command="contextfs",
         args=["--root", "./documents"]
     )
 
@@ -422,7 +422,7 @@ Mount cloud storage as a local directory:
 rclone mount gdrive:Knowledge /data/knowledge --read-only --vfs-cache-mode full --daemon
 
 # Configure MCP server to use mount point
-file-knowledge-mcp --root /data/knowledge
+contextfs --root /data/knowledge
 ```
 
 **Claude Desktop config:**
@@ -430,7 +430,7 @@ file-knowledge-mcp --root /data/knowledge
 {
   "mcpServers": {
     "knowledge": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "/data/knowledge"]
     }
   }
@@ -445,7 +445,7 @@ Use official sync clients (Google Drive Desktop, Dropbox, OneDrive):
 {
   "mcpServers": {
     "knowledge": {
-      "command": "file-knowledge-mcp",
+      "command": "contextfs",
       "args": ["--root", "~/Google Drive/Knowledge"]
     }
   }
@@ -473,7 +473,7 @@ Run the MCP server as a systemd service.
 
 ### Create Service File
 
-`/etc/systemd/system/file-knowledge-mcp.service`:
+`/etc/systemd/system/contextfs.service`:
 
 ```ini
 [Unit]
@@ -484,13 +484,13 @@ After=network.target
 Type=simple
 User=youruser
 WorkingDirectory=/home/youruser
-ExecStart=/usr/local/bin/file-knowledge-mcp --root /data/knowledge
+ExecStart=/usr/local/bin/contextfs --root /data/knowledge
 Restart=on-failure
 RestartSec=10
 
 # Environment variables
-Environment="FKM_SEARCH__MAX_RESULTS=100"
-Environment="FKM_SECURITY__FILTER_MODE=whitelist"
+Environment="CFS_SEARCH__MAX_RESULTS=100"
+Environment="CFS_SECURITY__FILTER_MODE=whitelist"
 
 # Logging
 StandardOutput=journal
@@ -507,16 +507,16 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 
 # Enable on boot
-sudo systemctl enable file-knowledge-mcp
+sudo systemctl enable contextfs
 
 # Start service
-sudo systemctl start file-knowledge-mcp
+sudo systemctl start contextfs
 
 # Check status
-sudo systemctl status file-knowledge-mcp
+sudo systemctl status contextfs
 
 # View logs
-journalctl -u file-knowledge-mcp -f
+journalctl -u contextfs -f
 ```
 
 ---
@@ -542,7 +542,7 @@ security:
 
 Run:
 ```bash
-file-knowledge-mcp --config config.dev.yaml
+contextfs --config config.dev.yaml
 ```
 
 ### Production
@@ -590,8 +590,8 @@ server:
 
 Or:
 ```bash
-export FKM_SERVER__LOG_LEVEL=DEBUG
-file-knowledge-mcp --root ./documents
+export CFS_SERVER__LOG_LEVEL=DEBUG
+contextfs --root ./documents
 ```
 
 ### Log Output
@@ -617,7 +617,7 @@ async def health_check():
     """Check if MCP server is responding."""
     try:
         server_params = StdioServerParameters(
-            command="file-knowledge-mcp",
+            command="contextfs",
             args=["--root", "./documents"]
         )
 
@@ -642,8 +642,8 @@ asyncio.run(health_check())
 ### Server Not Appearing in Claude Desktop
 
 1. Check configuration file syntax (valid JSON)
-2. Verify command path: `which file-knowledge-mcp`
-3. Test command manually: `file-knowledge-mcp --root ./documents`
+2. Verify command path: `which contextfs`
+3. Test command manually: `contextfs --root ./documents`
 4. Check Claude Desktop logs (Help → View Logs)
 5. Restart Claude Desktop completely
 
@@ -654,7 +654,7 @@ asyncio.run(health_check())
 chmod -R +r /path/to/documents
 
 # Ensure MCP binary is executable
-chmod +x $(which file-knowledge-mcp)
+chmod +x $(which contextfs)
 ```
 
 ### Path Issues
@@ -674,7 +674,7 @@ chmod +x $(which file-knowledge-mcp)
 
 ```bash
 # Check volume mounts
-docker run -it --rm -v /path/to/docs:/knowledge:ro file-knowledge-mcp ls /knowledge
+docker run -it --rm -v /path/to/docs:/knowledge:ro contextfs ls /knowledge
 
 # Check container logs
 docker logs <container-id>

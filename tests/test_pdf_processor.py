@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from pypdf import PdfWriter
 
-from file_knowledge_mcp.pdf.parallel import ParallelPDFProcessor
+from contextfs.pdf.parallel import ParallelPDFProcessor
 
 
 @pytest.fixture

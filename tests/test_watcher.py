@@ -7,7 +7,7 @@ import pytest
 # Skip all tests if watchfiles is not installed
 pytest.importorskip("watchfiles")
 
-from file_knowledge_mcp.search.watcher import FileWatcher, WatcherManager
+from contextfs.search.watcher import FileWatcher, WatcherManager
 
 
 @pytest.fixture

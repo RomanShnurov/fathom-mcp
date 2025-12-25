@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from file_knowledge_mcp.search.index import DocumentIndex
+from contextfs.search.index import DocumentIndex
 
 
 @pytest.fixture
