@@ -4,6 +4,7 @@ import fnmatch
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from mcp.types import TextContent, Tool
 
@@ -57,7 +58,7 @@ Supports partial matching.""",
     ]
 
 
-async def handle_browse_tool(name: str, arguments: dict, config: Config) -> list[TextContent]:
+async def handle_browse_tool(name: str, arguments: dict[str, Any], config: Config) -> list[TextContent]:
     """Handle browse tool calls."""
     if name == "list_collections":
         result = await _list_collections(config, arguments.get("path", ""))
@@ -74,7 +75,7 @@ async def handle_browse_tool(name: str, arguments: dict, config: Config) -> list
     raise ValueError(f"Unknown tool: {name}")
 
 
-async def _list_collections(config: Config, path: str) -> dict:
+async def _list_collections(config: Config, path: str) -> dict[str, Any]:
     """List collections at path."""
     root = config.knowledge.root
 
@@ -124,7 +125,7 @@ async def _list_collections(config: Config, path: str) -> dict:
     }
 
 
-async def _find_document(config: Config, query: str, limit: int) -> dict:
+async def _find_document(config: Config, query: str, limit: int) -> dict[str, Any]:
     """Find documents matching query."""
     root = config.knowledge.root
     query_lower = query.lower()
@@ -162,7 +163,8 @@ async def _find_document(config: Config, query: str, limit: int) -> dict:
         )
 
     # Sort by score descending
-    matches.sort(key=lambda x: x["score"], reverse=True)
+    from typing import cast
+    matches.sort(key=lambda x: cast(float, x["score"]), reverse=True)
 
     return {
         "matches": matches[:limit],
@@ -196,7 +198,7 @@ def _count_documents(directory: Path, config: Config) -> int:
     return count
 
 
-def format_result(result: dict) -> str:
+def format_result(result: dict[str, Any]) -> str:
     """Format result as readable string."""
     import json
 

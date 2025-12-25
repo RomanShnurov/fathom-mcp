@@ -1,9 +1,9 @@
 """Configuration management with Pydantic."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -255,7 +255,7 @@ def load_config(config_path: str | Path | None = None) -> Config:
     Raises:
         ConfigError: If configuration is invalid
     """
-    config_data: dict = {}
+    config_data: dict[str, Any] = {}
 
     if config_path:
         path = Path(config_path)

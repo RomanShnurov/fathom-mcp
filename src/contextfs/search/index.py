@@ -54,7 +54,7 @@ class DocumentIndex:
         self._lock = asyncio.Lock()
 
         # Index statistics
-        self._stats = {
+        self._stats: dict[str, int | float | None] = {
             "total_documents": 0,
             "total_terms": 0,
             "last_build": None,

@@ -3,8 +3,9 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class FileWatcher:
     def __init__(
         self,
         knowledge_root: Path,
-        on_change_callback: Callable[[list[Path]], None] | None = None,
+        on_change_callback: Callable[[list[Path]], None] | Callable[[list[Path]], Coroutine[Any, Any, None]] | None = None,
         watch_extensions: list[str] | None = None,
     ):
         """Initialize file watcher.
@@ -28,13 +29,13 @@ class FileWatcher:
         self.knowledge_root = knowledge_root.resolve()
         self.on_change = on_change_callback
         self.watch_extensions = set(watch_extensions or [])
-        self._watcher_task: asyncio.Task | None = None
+        self._watcher_task: asyncio.Task[None] | None = None
         self._running = False
 
         # Debounce settings to avoid too many updates
         self._debounce_seconds = 2.0
         self._pending_changes: set[Path] = set()
-        self._debounce_task: asyncio.Task | None = None
+        self._debounce_task: asyncio.Task[None] | None = None
 
     async def start_watching(self) -> None:
         """Start monitoring file changes.
@@ -47,7 +48,7 @@ class FileWatcher:
             raise RuntimeError("FileWatcher is already running")
 
         try:
-            from watchfiles import awatch
+            from watchfiles import awatch  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
                 "watchfiles is required for file watching. Install with: pip install watchfiles"
@@ -93,7 +94,7 @@ class FileWatcher:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._debounce_task
 
-    def _filter_changes(self, changes: set) -> list[Path]:
+    def _filter_changes(self, changes: set[tuple[Any, str]]) -> list[Path]:
         """Filter file changes to only include relevant files.
 
         Args:
@@ -186,7 +187,7 @@ class FileWatcher:
 class WatcherManager:
     """Manage file watcher lifecycle with the index."""
 
-    def __init__(self, knowledge_root: Path, document_index):
+    def __init__(self, knowledge_root: Path, document_index: Any):
         """Initialize watcher manager.
 
         Args:
@@ -196,7 +197,7 @@ class WatcherManager:
         self.knowledge_root = knowledge_root
         self.document_index = document_index
         self.watcher: FileWatcher | None = None
-        self._background_task: asyncio.Task | None = None
+        self._background_task: asyncio.Task[None] | None = None
 
     async def start(self, watch_extensions: list[str] | None = None) -> None:
         """Start file watching and automatic index updates.

@@ -11,19 +11,19 @@ from .config import Config
 def register_resources(server: Server, config: Config) -> None:
     """Register MCP resources."""
 
-    @server.list_resources()
+    @server.list_resources()  # type: ignore
     async def list_resources() -> list[Resource]:
         """List available resources."""
         return [
             Resource(
-                uri="knowledge://index",
+                uri="knowledge://index",  # type: ignore[arg-type]
                 name="Knowledge Base Index",
                 description="Root index of all collections",
                 mimeType="application/json",
             ),
         ]
 
-    @server.list_resource_templates()
+    @server.list_resource_templates()  # type: ignore
     async def list_resource_templates() -> list[ResourceTemplate]:
         """List resource URI templates."""
         return [
@@ -41,7 +41,7 @@ def register_resources(server: Server, config: Config) -> None:
             ),
         ]
 
-    @server.read_resource()
+    @server.read_resource()  # type: ignore
     async def read_resource(uri: str) -> str:
         """Read resource content."""
         # Parse URI: knowledge://path/type

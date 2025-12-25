@@ -123,7 +123,7 @@ class ParallelPDFProcessor:
         """
         reader = await asyncio.to_thread(PdfReader, pdf_path)
 
-        metadata = {
+        metadata: dict[str, Any] = {
             "pages": len(reader.pages),
             "has_toc": False,
             "toc": None,
@@ -139,11 +139,13 @@ class ParallelPDFProcessor:
 
         # Handle results
         if not isinstance(pdf_meta, Exception) and pdf_meta:
-            metadata.update(pdf_meta)
+            if isinstance(pdf_meta, dict):
+                metadata.update(pdf_meta)
 
         if not isinstance(toc, Exception) and toc:
             metadata["has_toc"] = True
-            metadata["toc"] = toc
+            if isinstance(toc, list):
+                metadata["toc"] = toc
 
         return metadata
 
@@ -163,7 +165,7 @@ class ParallelPDFProcessor:
 
         return meta
 
-    def _extract_toc(self, reader: PdfReader) -> list[dict] | None:
+    def _extract_toc(self, reader: PdfReader) -> list[dict[str, Any]] | None:
         """Extract PDF table of contents (runs in thread pool)."""
         try:
             outlines = reader.outline
@@ -174,12 +176,12 @@ class ParallelPDFProcessor:
 
         return None
 
-    def _parse_outlines(self, reader: PdfReader, outlines, depth: int = 0) -> list[dict]:
+    def _parse_outlines(self, reader: PdfReader, outlines: Any, depth: int = 0) -> list[dict[str, Any]]:
         """Recursively parse PDF outlines into TOC structure."""
         if depth > 5:  # Limit depth
             return []
 
-        toc = []
+        toc: list[dict[str, Any]] = []
 
         for item in outlines:
             if isinstance(item, list):
@@ -222,7 +224,7 @@ class ParallelPDFProcessor:
             List of results for each PDF
         """
         if operation == "extract":
-            tasks = [self.extract_text_parallel(path) for path in pdf_paths]
+            tasks: list[Any] = [self.extract_text_parallel(path) for path in pdf_paths]
         elif operation == "metadata":
             tasks = [self.extract_metadata(path) for path in pdf_paths]
         else:
@@ -256,7 +258,7 @@ class ParallelPDFProcessor:
         """Shutdown the thread pool executor."""
         self._executor.shutdown(wait=True)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup on deletion."""
         with contextlib.suppress(Exception):
             self._executor.shutdown(wait=False)

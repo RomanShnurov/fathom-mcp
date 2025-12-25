@@ -30,12 +30,12 @@ class SearchCache:
         self._cache: dict[str, CacheEntry] = {}
         self._lock = asyncio.Lock()
 
-    def _make_key(self, query: str, path: str, **kwargs) -> str:
+    def _make_key(self, query: str, path: str, **kwargs: Any) -> str:
         """Generate cache key from search parameters."""
         key_data = f"{query}:{path}:{sorted(kwargs.items())}"
         return hashlib.sha256(key_data.encode()).hexdigest()[:16]
 
-    async def get(self, query: str, path: str, **kwargs) -> Any | None:
+    async def get(self, query: str, path: str, **kwargs: Any) -> Any | None:
         """Get cached result if exists and not expired."""
         key = self._make_key(query, path, **kwargs)
 
@@ -53,7 +53,7 @@ class SearchCache:
             entry.hits += 1
             return entry.result
 
-    async def set(self, query: str, path: str, result: Any, **kwargs) -> None:
+    async def set(self, query: str, path: str, result: Any, **kwargs: Any) -> None:
         """Cache search result."""
         key = self._make_key(query, path, **kwargs)
 
@@ -84,7 +84,7 @@ class SearchCache:
             self._cache.clear()
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, int]:
         """Get cache statistics."""
         total_hits = sum(e.hits for e in self._cache.values())
         return {
@@ -108,7 +108,7 @@ class SmartSearchCache(SearchCache):
         super().__init__(max_size, ttl_seconds)
         self.knowledge_root = knowledge_root.resolve()
 
-    async def get_with_validation(self, query: str, path: str, **kwargs) -> Any | None:
+    async def get_with_validation(self, query: str, path: str, **kwargs: Any) -> Any | None:
         """Get cached result with file modification time validation.
 
         Args:
@@ -143,7 +143,7 @@ class SmartSearchCache(SearchCache):
             entry.hits += 1
             return entry.result
 
-    async def set_with_tracking(self, query: str, path: str, result: Any, **kwargs) -> None:
+    async def set_with_tracking(self, query: str, path: str, result: Any, **kwargs: Any) -> None:
         """Cache search result with file modification time tracking.
 
         Args:

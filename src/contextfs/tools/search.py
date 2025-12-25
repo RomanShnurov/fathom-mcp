@@ -1,12 +1,13 @@
 """Search tools: search_documents."""
 
 import logging
+from typing import Any
 
 from mcp.types import TextContent, Tool
 
 from ..config import Config
 from ..errors import document_not_found, path_not_found
-from ..search.ugrep import UgrepEngine
+from ..search.ugrep import SearchResult, UgrepEngine
 from ..security import FileAccessControl
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ Each term can use boolean syntax (space=AND, |=OR, -=NOT).""",
     ]
 
 
-async def handle_search_tool(name: str, arguments: dict, config: Config) -> list[TextContent]:
+async def handle_search_tool(name: str, arguments: dict[str, Any], config: Config) -> list[TextContent]:
     """Handle search tool calls."""
     engine = UgrepEngine(config)
 
@@ -119,7 +120,7 @@ async def handle_search_tool(name: str, arguments: dict, config: Config) -> list
     raise ValueError(f"Unknown tool: {name}")
 
 
-async def _search_documents(config: Config, engine: UgrepEngine, args: dict) -> dict:
+async def _search_documents(config: Config, engine: UgrepEngine, args: dict[str, Any]) -> dict[str, Any]:
     """Execute document search."""
     query = args["query"]
     scope = args["scope"]
@@ -183,8 +184,8 @@ async def _search_documents(config: Config, engine: UgrepEngine, args: dict) -> 
 async def _search_multiple(
     config: Config,
     engine: UgrepEngine,
-    args: dict,
-) -> dict:
+    args: dict[str, Any],
+) -> dict[str, Any]:
     """Search multiple terms in parallel."""
     import asyncio
     import time
@@ -232,7 +233,7 @@ async def _search_multiple(
                 "found": False,
                 "error": str(result),
             }
-        else:
+        elif isinstance(result, SearchResult):
             result_dict[term] = {
                 "found": result.total_matches > 0,
                 "match_count": result.total_matches,
@@ -253,7 +254,7 @@ async def _search_multiple(
     }
 
 
-def format_result(result: dict) -> str:
+def format_result(result: dict[str, Any]) -> str:
     import json
 
     return json.dumps(result, indent=2, ensure_ascii=False)

@@ -44,6 +44,7 @@ class UgrepEngine:
         self.config = config
 
         # Use SmartSearchCache if enabled in performance config
+        self.cache: SearchCache
         if config.performance.enable_smart_cache and cache is None:
             self.cache = SmartSearchCache(
                 config.knowledge.root,
@@ -90,7 +91,9 @@ class UgrepEngine:
 
         # Check cache first (use smart cache if available)
         if self._use_smart_cache:
-            cached = await self.cache.get_with_validation(
+            from typing import cast
+            smart_cache = cast(SmartSearchCache, self.cache)
+            cached = await smart_cache.get_with_validation(
                 query,
                 str(path),
                 recursive=recursive,
@@ -110,14 +113,17 @@ class UgrepEngine:
 
         if cached is not None:
             logger.debug(f"Cache hit for query: {query}")
-            return cached
+            from typing import cast
+            return cast(SearchResult, cached)
 
         # Execute search
         result = await self._execute_search(query, path, recursive, context, max_res, fuzzy)
 
         # Cache result (use smart cache if available)
         if self._use_smart_cache:
-            await self.cache.set_with_tracking(
+            from typing import cast
+            smart_cache = cast(SmartSearchCache, self.cache)
+            await smart_cache.set_with_tracking(
                 query,
                 str(path),
                 result,
@@ -225,7 +231,7 @@ class UgrepEngine:
 
         return cmd
 
-    async def _run_ugrep(self, cmd: list[str]) -> subprocess.CompletedProcess:
+    async def _run_ugrep(self, cmd: list[str]) -> subprocess.CompletedProcess[str]:
         """Run ugrep in thread pool."""
         result = await asyncio.to_thread(
             subprocess.run,
@@ -259,7 +265,7 @@ class UgrepEngine:
 
         matches = []
         current_match = None
-        context_before = []
+        context_before: list[str] = []
 
         for line in stdout.split("\n"):
             if not line:

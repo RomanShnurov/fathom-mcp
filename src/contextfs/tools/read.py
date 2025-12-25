@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from mcp.types import TextContent, Tool
 from pypdf import PdfReader
@@ -58,7 +59,7 @@ TOC is only available for PDFs with embedded bookmarks.""",
     ]
 
 
-async def handle_read_tool(name: str, arguments: dict, config: Config) -> list[TextContent]:
+async def handle_read_tool(name: str, arguments: dict[str, Any], config: Config) -> list[TextContent]:
     """Handle read tool calls."""
     if name == "read_document":
         result = await _read_document(config, arguments)
@@ -70,7 +71,7 @@ async def handle_read_tool(name: str, arguments: dict, config: Config) -> list[T
     raise ValueError(f"Unknown tool: {name}")
 
 
-async def _read_document(config: Config, args: dict) -> dict:
+async def _read_document(config: Config, args: dict[str, Any]) -> dict[str, Any]:
     """Read document content."""
     import asyncio
 
@@ -153,7 +154,7 @@ def _read_pdf(path: Path, pages: list[int]) -> tuple[str, int, list[int]]:
     return "\n".join(text_parts), total_pages, [i + 1 for i in page_indices]
 
 
-async def _get_document_info(config: Config, args: dict) -> dict:
+async def _get_document_info(config: Config, args: dict[str, Any]) -> dict[str, Any]:
     """Get document metadata and TOC."""
     import asyncio
 
@@ -201,11 +202,11 @@ async def _get_document_info(config: Config, args: dict) -> dict:
     return info
 
 
-def _extract_pdf_info(path: Path) -> dict:
+def _extract_pdf_info(path: Path) -> dict[str, Any]:
     """Extract PDF metadata and TOC."""
     reader = PdfReader(path)
 
-    info = {
+    info: dict[str, Any] = {
         "pages": len(reader.pages),
         "has_toc": False,
         "toc": None,
@@ -229,12 +230,12 @@ def _extract_pdf_info(path: Path) -> dict:
     return info
 
 
-def _parse_outlines(reader: PdfReader, outlines, depth: int = 0) -> list[dict]:
+def _parse_outlines(reader: PdfReader, outlines: Any, depth: int = 0) -> list[dict[str, Any]]:
     """Recursively parse PDF outlines into TOC structure."""
     if depth > 5:  # Limit depth
         return []
 
-    toc = []
+    toc: list[dict[str, Any]] = []
 
     for item in outlines:
         if isinstance(item, list):
@@ -265,7 +266,7 @@ def _parse_outlines(reader: PdfReader, outlines, depth: int = 0) -> list[dict]:
     return toc
 
 
-def format_result(result: dict) -> str:
+def format_result(result: dict[str, Any]) -> str:
     import json
 
     return json.dumps(result, indent=2, ensure_ascii=False)

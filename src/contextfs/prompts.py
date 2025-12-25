@@ -1,5 +1,7 @@
 """MCP Prompts for common knowledge base tasks."""
 
+from typing import Any
+
 from mcp.server import Server
 from mcp.types import GetPromptResult, Prompt, PromptArgument, PromptMessage, TextContent
 
@@ -9,7 +11,7 @@ from .config import Config
 def register_prompts(server: Server, config: Config) -> None:
     """Register MCP prompts."""
 
-    @server.list_prompts()
+    @server.list_prompts()  # type: ignore
     async def list_prompts() -> list[Prompt]:
         return [
             Prompt(
@@ -62,9 +64,9 @@ def register_prompts(server: Server, config: Config) -> None:
             ),
         ]
 
-    @server.get_prompt()
-    async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
-        args = arguments or {}
+    @server.get_prompt()  # type: ignore
+    async def get_prompt(name: str, arguments: dict[str, Any] | None) -> GetPromptResult:
+        args: dict[str, Any] = arguments or {}
 
         if name == "answer_question":
             messages = _answer_question_prompt(args)
@@ -78,7 +80,7 @@ def register_prompts(server: Server, config: Config) -> None:
         return GetPromptResult(messages=messages)
 
 
-def _answer_question_prompt(args: dict) -> list[PromptMessage]:
+def _answer_question_prompt(args: dict[str, Any]) -> list[PromptMessage]:
     """Generate answer_question prompt."""
     question = args.get("question", "")
     collection = args.get("collection", "")
@@ -111,7 +113,7 @@ Format your answer with:
     ]
 
 
-def _summarize_document_prompt(args: dict) -> list[PromptMessage]:
+def _summarize_document_prompt(args: dict[str, Any]) -> list[PromptMessage]:
     """Generate summarize_document prompt."""
     document_path = args.get("document_path", "")
 
@@ -137,7 +139,7 @@ Format: Use markdown with headers for each major section.""",
     ]
 
 
-def _compare_documents_prompt(args: dict) -> list[PromptMessage]:
+def _compare_documents_prompt(args: dict[str, Any]) -> list[PromptMessage]:
     """Generate compare_documents prompt."""
     doc1 = args.get("doc1", "")
     doc2 = args.get("doc2", "")

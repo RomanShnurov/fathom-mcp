@@ -1,5 +1,7 @@
 """MCP Tools registration."""
 
+from typing import Any
+
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
@@ -13,7 +15,7 @@ def register_all_tools(server: Server, config: Config) -> None:
     """Register all tools with the MCP server."""
 
     # Centralized list_tools handler
-    @server.list_tools()
+    @server.list_tools()  # type: ignore
     async def list_tools() -> list[Tool]:
         """Return all available tools."""
         tools = []
@@ -23,8 +25,8 @@ def register_all_tools(server: Server, config: Config) -> None:
         return tools
 
     # Centralized call_tool handler
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    @server.call_tool()  # type: ignore
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """Route tool calls to appropriate handlers."""
         # Browse tools
         if name in ("list_collections", "find_document"):
