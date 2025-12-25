@@ -223,10 +223,37 @@ class FileAccessControl:
         if isinstance(requested_path, str):
             requested_path = Path(requested_path)
 
-        # Resolve to absolute path
+        # Join with knowledge root (but don't resolve yet)
+        unresolved_path = self.knowledge_root / requested_path
+
+        # Symlink policy check - must be done BEFORE resolving
+        if not self.security_config.follow_symlinks:
+            # Check if the target path or any component in the path is a symlink
+            try:
+                current = unresolved_path
+                while current != self.knowledge_root:
+                    if current.exists() and current.is_symlink():
+                        logger.warning(f"Symlink access denied: {current}")
+                        raise McpError(
+                            code=ErrorCode.SYMLINK_NOT_ALLOWED,
+                            message="Symbolic links are not allowed",
+                            data={
+                                "path": str(requested_path),
+                                "symlink_component": str(current),
+                                "reason": "Symlink policy forbids following symbolic links",
+                            },
+                        )
+                    current = current.parent
+                    # Safety check to prevent infinite loop
+                    if current == current.parent:
+                        break
+            except (OSError, RuntimeError) as e:
+                logger.warning(f"Error checking path for symlinks: {e}")
+                # Continue - we'll let other checks catch issues
+
+        # Now resolve to absolute path
         try:
-            # Join with knowledge root and resolve
-            full_path = (self.knowledge_root / requested_path).resolve()
+            full_path = unresolved_path.resolve()
         except (ValueError, OSError) as e:
             logger.warning(f"Invalid path resolution: {requested_path} - {e}")
             raise McpError(
@@ -255,44 +282,6 @@ class FileAccessControl:
                         "reason": "Path resolves outside knowledge root directory",
                     },
                 ) from None
-
-        # Symlink policy check
-        if not self.security_config.follow_symlinks:
-            # Check if any component in the path is a symlink
-            if full_path.is_symlink():
-                logger.warning(f"Symlink access denied: {full_path}")
-                raise McpError(
-                    code=ErrorCode.SYMLINK_NOT_ALLOWED,
-                    message="Symbolic links are not allowed",
-                    data={
-                        "path": str(requested_path),
-                        "resolved_path": str(full_path),
-                        "reason": "Symlink policy forbids following symbolic links",
-                    },
-                )
-
-            # Also check parent directories for symlinks
-            try:
-                current = full_path
-                while current != self.knowledge_root:
-                    if current.is_symlink():
-                        logger.warning(f"Symlink in path: {current}")
-                        raise McpError(
-                            code=ErrorCode.SYMLINK_NOT_ALLOWED,
-                            message="Symbolic links in path are not allowed",
-                            data={
-                                "path": str(requested_path),
-                                "symlink_component": str(current),
-                                "reason": "Path contains symbolic link component",
-                            },
-                        )
-                    current = current.parent
-                    # Safety check to prevent infinite loop
-                    if current == current.parent:
-                        break
-            except (OSError, RuntimeError) as e:
-                logger.warning(f"Error checking path for symlinks: {e}")
-                # Continue - we'll let other checks catch issues
 
         return full_path
 
