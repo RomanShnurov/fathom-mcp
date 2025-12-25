@@ -1,5 +1,5 @@
 # Multi-stage build for smaller image
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,14 +12,15 @@ RUN pip install uv
 WORKDIR /app
 
 # Copy dependency files and README (required by pyproject.toml)
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
+COPY src/ ./src/
 
-# Create virtual environment and install dependencies
+# Create virtual environment and install dependencies with frozen lock file
 RUN uv venv /app/.venv
-RUN . /app/.venv/bin/activate && uv pip install --no-cache .
+RUN . /app/.venv/bin/activate && uv sync --frozen
 
 # --- Runtime stage ---
-FROM python:3.12-slim as runtime
+FROM python:3.12-slim AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -30,17 +31,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
 USER app
-WORKDIR /home/app
+WORKDIR /home/app/app/src
 
-# Copy virtual environment from builder
-COPY --from=builder /app/.venv /home/app/.venv
-
-# Copy application code
-COPY --chown=app:app src/ /home/app/src/
+# Copy virtual environment and source from builder
+COPY --from=builder /app /home/app/app
 
 # Set up environment
-ENV PATH="/home/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/home/app"
+ENV PATH="/home/app/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/home/app/app/src"
 
 # Default knowledge directory (read-only recommended)
 VOLUME /knowledge
@@ -52,3 +50,7 @@ VOLUME /config
 # Entry point
 ENTRYPOINT ["python", "-m", "contextfs"]
 CMD ["--config", "/config/config.yaml"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import contextfs; print('OK')" || exit 1
