@@ -106,7 +106,9 @@ Each term can use boolean syntax (space=AND, |=OR, -=NOT).""",
     ]
 
 
-async def handle_search_tool(name: str, arguments: dict[str, Any], config: Config) -> list[TextContent]:
+async def handle_search_tool(
+    name: str, arguments: dict[str, Any], config: Config
+) -> list[TextContent]:
     """Handle search tool calls."""
     engine = UgrepEngine(config)
 
@@ -120,7 +122,9 @@ async def handle_search_tool(name: str, arguments: dict[str, Any], config: Confi
     raise ValueError(f"Unknown tool: {name}")
 
 
-async def _search_documents(config: Config, engine: UgrepEngine, args: dict[str, Any]) -> dict[str, Any]:
+async def _search_documents(
+    config: Config, engine: UgrepEngine, args: dict[str, Any]
+) -> dict[str, Any]:
     """Execute document search."""
     query = args["query"]
     scope = args["scope"]

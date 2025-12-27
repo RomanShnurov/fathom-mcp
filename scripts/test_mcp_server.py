@@ -6,7 +6,6 @@ Tests all MCP tools by sending JSON-RPC requests via stdio.
 
 import asyncio
 import json
-import sys
 from pathlib import Path
 
 
@@ -208,9 +207,7 @@ async def run_tests():
         print("=" * 60)
         print("TEST 6: Read 'programming/python-basics.md'")
         print("=" * 60)
-        result = await client.call_tool(
-            "read_document", {"path": "programming/python-basics.md"}
-        )
+        result = await client.call_tool("read_document", {"path": "programming/python-basics.md"})
         if "error" in result:
             print(f"❌ Error: {result['error']}")
         else:

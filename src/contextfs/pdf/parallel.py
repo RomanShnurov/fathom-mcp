@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import functools
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -41,7 +42,8 @@ class ParallelPDFProcessor:
             Extracted text content
         """
         # Load PDF reader in thread pool
-        reader = await asyncio.to_thread(PdfReader, pdf_path)
+        loop = asyncio.get_event_loop()
+        reader = await loop.run_in_executor(self._executor, PdfReader, pdf_path)
         total_pages = len(reader.pages)
 
         # Determine which pages to process
@@ -64,11 +66,9 @@ class ParallelPDFProcessor:
 
         # Process chunks in parallel
         tasks = [
-            asyncio.to_thread(
-                self._extract_chunk,
-                reader,
-                chunk,
-                include_page_markers,
+            loop.run_in_executor(
+                self._executor,
+                functools.partial(self._extract_chunk, reader, chunk, include_page_markers),
             )
             for chunk in chunks
         ]
@@ -121,7 +121,8 @@ class ParallelPDFProcessor:
         Returns:
             Dictionary with metadata including page count, TOC, etc.
         """
-        reader = await asyncio.to_thread(PdfReader, pdf_path)
+        loop = asyncio.get_event_loop()
+        reader = await loop.run_in_executor(self._executor, PdfReader, pdf_path)
 
         metadata: dict[str, Any] = {
             "pages": len(reader.pages),
@@ -131,11 +132,11 @@ class ParallelPDFProcessor:
 
         # Extract metadata in parallel tasks
         tasks = [
-            asyncio.to_thread(self._extract_pdf_metadata, reader),
-            asyncio.to_thread(self._extract_toc, reader),
+            loop.run_in_executor(self._executor, self._extract_pdf_metadata, reader),
+            loop.run_in_executor(self._executor, self._extract_toc, reader),
         ]
 
-        pdf_meta, toc = await asyncio.gather(*tasks, return_exceptions=True)
+        pdf_meta, toc = await asyncio.gather(*tasks, return_exceptions=True)  # type: ignore[call-overload]
 
         # Handle results
         if not isinstance(pdf_meta, Exception) and pdf_meta and isinstance(pdf_meta, dict):
@@ -175,7 +176,9 @@ class ParallelPDFProcessor:
 
         return None
 
-    def _parse_outlines(self, reader: PdfReader, outlines: Any, depth: int = 0) -> list[dict[str, Any]]:
+    def _parse_outlines(
+        self, reader: PdfReader, outlines: Any, depth: int = 0
+    ) -> list[dict[str, Any]]:
         """Recursively parse PDF outlines into TOC structure."""
         if depth > 5:  # Limit depth
             return []

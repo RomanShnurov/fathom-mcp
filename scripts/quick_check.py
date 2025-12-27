@@ -12,9 +12,7 @@ import time
 def check_dependency(command, name):
     """Check if a system dependency is available."""
     try:
-        result = subprocess.run(
-            command, capture_output=True, text=True, shell=True, timeout=5
-        )
+        result = subprocess.run(command, capture_output=True, text=True, shell=True, timeout=5)
         print(f"✅ {name} is installed")
         return True
     except Exception as e:
@@ -52,7 +50,7 @@ def check_server_startup():
             print("✅ Server initialized successfully")
             return True
         elif "ERROR" in stderr or "Traceback" in stderr:
-            print(f"❌ Server had errors during startup:")
+            print("❌ Server had errors during startup:")
             print(stderr[-500:])  # Last 500 chars
             return False
         else:
@@ -62,6 +60,7 @@ def check_server_startup():
     except Exception as e:
         print(f"❌ Error testing server startup: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -91,6 +90,7 @@ def main():
     print("\n📦 Checking Python environment...")
     try:
         import mcp
+
         print("✅ mcp package is installed")
     except ImportError:
         print("❌ mcp package is NOT installed")
@@ -99,6 +99,7 @@ def main():
 
     try:
         import yaml
+
         print("✅ yaml package is installed")
     except ImportError:
         print("❌ yaml package is NOT installed")
@@ -108,7 +109,7 @@ def main():
     # Check config file
     print("\n📄 Checking configuration...")
     try:
-        with open("config.yaml", "r") as f:
+        with open("config.yaml") as f:
             print("✅ config.yaml exists")
     except FileNotFoundError:
         print("❌ config.yaml NOT found")

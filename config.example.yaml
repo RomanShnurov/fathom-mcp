@@ -25,6 +25,7 @@ exclude:
 
 # Optional: format settings
 formats:
+  # === Existing formats ===
   pdf:
     enabled: true
     filter: "pdftotext - -"
@@ -37,6 +38,60 @@ formats:
     enabled: true
     filter: null
     extensions: [".txt", ".rst"]
+
+  # === Office Documents (require pandoc or antiword) ===
+  word_doc:
+    enabled: false  # Enable after installing antiword
+    filter: "antiword -t -w 0 %"
+    extensions: [".doc"]
+    # Install: brew install antiword (macOS) or apt install antiword (Linux)
+
+  word_docx:
+    enabled: false  # Enable after installing pandoc
+    filter: "pandoc --wrap=preserve -f docx -t plain % -o -"
+    extensions: [".docx"]
+    # Install: brew install pandoc (macOS) or apt install pandoc (Linux)
+
+  opendocument:
+    enabled: false
+    filter: "pandoc --wrap=preserve -f odt -t plain % -o -"
+    extensions: [".odt"]
+
+  epub:
+    enabled: false
+    filter: "pandoc --wrap=preserve -f epub -t plain % -o -"
+    extensions: [".epub"]
+
+  html:
+    enabled: false
+    filter: "pandoc --wrap=preserve -f html -t plain % -o -"
+    extensions: [".html", ".htm"]
+
+  rtf:
+    enabled: false
+    filter: "pandoc --wrap=preserve -f rtf -t plain % -o -"
+    extensions: [".rtf"]
+
+  # === Data Formats ===
+  csv:
+    enabled: true  # No external tools required
+    filter: null
+    extensions: [".csv"]
+
+  json:
+    enabled: false  # Enable after installing jq
+    filter: "jq -r '.'"
+    extensions: [".json"]
+    # Install: brew install jq (macOS) or apt install jq (Linux)
+
+  xml:
+    enabled: false
+    filter: "pandoc --wrap=preserve -f html -t plain % -o -"
+    extensions: [".xml"]
+
+# Note: When formats with filters are enabled, a .ugrep configuration file
+# will be automatically generated in the system temp directory (not in your
+# knowledge root, to avoid modifying your document directory).
 
 # Optional: limits
 limits:

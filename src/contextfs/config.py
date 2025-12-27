@@ -126,9 +126,20 @@ class SecurityConfig(BaseModel):
             "pdftotext",
             "pdftotext - -",
             "pandoc",
+            "antiword",
+            "jq",
             "/usr/bin/pdftotext",
             "/usr/local/bin/pdftotext",
             "/opt/homebrew/bin/pdftotext",
+            "/usr/bin/pandoc",
+            "/usr/local/bin/pandoc",
+            "/opt/homebrew/bin/pandoc",
+            "/usr/bin/antiword",
+            "/usr/local/bin/antiword",
+            "/opt/homebrew/bin/antiword",
+            "/usr/bin/jq",
+            "/usr/local/bin/jq",
+            "/opt/homebrew/bin/jq",
         ],
         description="Whitelist of allowed filter commands and executables",
     )
@@ -205,17 +216,68 @@ class Config(BaseSettings):
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
     formats: dict[str, FormatConfig] = Field(
         default_factory=lambda: {
+            # === Existing formats ===
             "pdf": FormatConfig(
                 extensions=[".pdf"],
                 filter="pdftotext - -",
+                enabled=True,  # Already working
             ),
             "markdown": FormatConfig(
                 extensions=[".md", ".markdown"],
                 filter=None,
+                enabled=True,
             ),
             "text": FormatConfig(
                 extensions=[".txt", ".rst"],
                 filter=None,
+                enabled=True,
+            ),
+            # === NEW: Tier 1 - Office Documents ===
+            "word_doc": FormatConfig(
+                extensions=[".doc"],
+                filter="antiword -t -w 0 %",
+                enabled=False,  # Requires antiword
+            ),
+            "word_docx": FormatConfig(
+                extensions=[".docx"],
+                filter="pandoc --wrap=preserve -f docx -t plain % -o -",
+                enabled=False,  # Requires pandoc
+            ),
+            "opendocument": FormatConfig(
+                extensions=[".odt"],
+                filter="pandoc --wrap=preserve -f odt -t plain % -o -",
+                enabled=False,
+            ),
+            "epub": FormatConfig(
+                extensions=[".epub"],
+                filter="pandoc --wrap=preserve -f epub -t plain % -o -",
+                enabled=False,
+            ),
+            "html": FormatConfig(
+                extensions=[".html", ".htm"],
+                filter="pandoc --wrap=preserve -f html -t plain % -o -",
+                enabled=False,
+            ),
+            # === NEW: Tier 2 - Additional Formats ===
+            "rtf": FormatConfig(
+                extensions=[".rtf"],
+                filter="pandoc --wrap=preserve -f rtf -t plain % -o -",
+                enabled=False,
+            ),
+            "csv": FormatConfig(
+                extensions=[".csv"],
+                filter=None,  # Direct search
+                enabled=True,  # No dependencies
+            ),
+            "json": FormatConfig(
+                extensions=[".json"],
+                filter="jq -r '.'",
+                enabled=False,  # Requires jq
+            ),
+            "xml": FormatConfig(
+                extensions=[".xml"],
+                filter="pandoc --wrap=preserve -f html -t plain % -o -",
+                enabled=False,
             ),
         }
     )
@@ -230,11 +292,147 @@ class Config(BaseSettings):
         return exts
 
     def get_filter_for_extension(self, ext: str) -> str | None:
-        """Get filter command for file extension."""
-        for fmt in self.formats.values():
-            if fmt.enabled and ext.lower() in fmt.extensions:
-                return fmt.filter
+        """Get filter command for a file extension.
+
+        Args:
+            ext: File extension (with or without leading dot)
+
+        Returns:
+            Filter command string, or None if no filter needed
+        """
+        ext = ext.lower()
+        if not ext.startswith("."):
+            ext = f".{ext}"
+
+        for fmt_config in self.formats.values():
+            if fmt_config.enabled and ext in fmt_config.extensions:
+                return fmt_config.filter
+
         return None
+
+    def needs_document_filters(self) -> bool:
+        """Check if any enabled formats require filter commands.
+
+        Returns:
+            True if at least one enabled format has a filter command
+        """
+        return any(fmt.enabled and fmt.filter is not None for fmt in self.formats.values())
+
+    def prepare_filter_for_stdin(self, filter_cmd: str) -> str:
+        """Convert ugrep filter syntax (%) to stdin-compatible syntax (-).
+
+        Args:
+            filter_cmd: Filter command with % placeholder
+
+        Returns:
+            Filter command with stdin syntax
+        """
+        # Only replace % when it's used as a filename placeholder
+        # ugrep uses % as the filename placeholder
+        if " % " in filter_cmd:
+            return filter_cmd.replace(" % ", " - ")
+        elif filter_cmd.endswith(" %"):
+            return filter_cmd[:-2] + " -"
+        # If no %, assume stdin already
+        return filter_cmd
+
+    def generate_ugrep_config(self) -> str:
+        """Generate .ugrep configuration file content.
+
+        Returns:
+            String content for .ugrep file
+        """
+        import shlex
+        from datetime import datetime
+
+        lines = [
+            "### Generated by contextfs MCP server",
+            f"### Knowledge root: {self.knowledge.root}",
+            f"### Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            "# Document filters",
+        ]
+
+        # Add filter for each enabled format
+        for _fmt_name, fmt_config in self.formats.items():
+            if not fmt_config.enabled or not fmt_config.filter:
+                continue
+
+            # Build extension list
+            exts = ",".join(ext.lstrip(".") for ext in fmt_config.extensions)
+
+            # Use shlex.quote for proper escaping on all platforms (Windows-safe)
+            filter_spec = f"{exts}:{fmt_config.filter}"
+            lines.append(f"--filter={shlex.quote(filter_spec)}")
+
+        # Add performance settings from search config
+        lines.extend(
+            [
+                "",
+                "# Performance settings",
+                f"--context={self.search.context_lines}",
+                f"--max-count={self.search.max_results}",
+                "",
+                "# UI preferences",
+                "--color=always",
+                "--line-number",
+                "--with-filename",
+            ]
+        )
+
+        return "\n".join(lines) + "\n"
+
+    def get_ugrep_config_path(self) -> Path:
+        """Get path for .ugrep configuration file.
+
+        Uses temp directory to avoid modifying user's document directory.
+
+        Returns:
+            Path to .ugrep file location
+        """
+        import tempfile
+
+        # Use temp directory with hash to make it unique per knowledge root
+        root_hash = abs(hash(str(self.knowledge.root)))
+        ugrep_filename = f".ugrep-contextfs-{root_hash}"
+        return Path(tempfile.gettempdir()) / ugrep_filename
+
+    def write_ugrep_config(self) -> Path:
+        """Write .ugrep configuration file with atomic write.
+
+        Returns:
+            Path to created .ugrep file
+
+        Raises:
+            ConfigError: If file cannot be written
+        """
+        import logging
+        import tempfile
+
+        logger = logging.getLogger(__name__)
+        ugrep_path = self.get_ugrep_config_path()
+        content = self.generate_ugrep_config()
+
+        try:
+            # Atomic write: write to temp file, then move
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                suffix=".ugrep",
+                dir=ugrep_path.parent,
+                delete=False,
+            ) as tmp:
+                tmp.write(content)
+                tmp_path = Path(tmp.name)
+
+            # Atomic rename (POSIX) or move (Windows)
+            tmp_path.replace(ugrep_path)
+            logger.info(f"Generated .ugrep config at {ugrep_path}")
+            return ugrep_path
+
+        except (OSError, PermissionError) as e:
+            logger.error(f"Failed to write .ugrep config to {ugrep_path}: {e}")
+            raise ConfigError(f"Cannot write .ugrep configuration: {e}") from e
 
 
 class ConfigError(Exception):

@@ -16,7 +16,9 @@ class FileWatcher:
     def __init__(
         self,
         knowledge_root: Path,
-        on_change_callback: Callable[[list[Path]], None] | Callable[[list[Path]], Coroutine[Any, Any, None]] | None = None,
+        on_change_callback: Callable[[list[Path]], None]
+        | Callable[[list[Path]], Coroutine[Any, Any, None]]
+        | None = None,
         watch_extensions: list[str] | None = None,
     ):
         """Initialize file watcher.

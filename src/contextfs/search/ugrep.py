@@ -92,6 +92,7 @@ class UgrepEngine:
         # Check cache first (use smart cache if available)
         if self._use_smart_cache:
             from typing import cast
+
             smart_cache = cast(SmartSearchCache, self.cache)
             cached = await smart_cache.get_with_validation(
                 query,
@@ -114,6 +115,7 @@ class UgrepEngine:
         if cached is not None:
             logger.debug(f"Cache hit for query: {query}")
             from typing import cast
+
             return cast(SearchResult, cached)
 
         # Execute search
@@ -122,6 +124,7 @@ class UgrepEngine:
         # Cache result (use smart cache if available)
         if self._use_smart_cache:
             from typing import cast
+
             smart_cache = cast(SmartSearchCache, self.cache)
             await smart_cache.set_with_tracking(
                 query,
@@ -187,7 +190,11 @@ class UgrepEngine:
         context_lines: int,
         fuzzy: bool,
     ) -> list[str]:
-        """Build ugrep command."""
+        """Build ugrep command with optional document filtering.
+
+        Uses ugrep with --config when document formats with filters are enabled.
+        Note: ug+ is just an alias for ugrep, both support filters via --config.
+        """
         cmd = [
             "ugrep",
             "-%",  # Boolean query mode
@@ -196,6 +203,20 @@ class UgrepEngine:
             "--line-number",
             "--with-filename",  # Always include filename in output
         ]
+
+        # Add .ugrep config file path if filters are needed
+        # Use filters only if at least one format actually requires a filter command
+        use_filters = self.config.needs_document_filters()
+        if use_filters:
+            ugrep_config = self.config.get_ugrep_config_path()
+            if ugrep_config.exists():
+                cmd.extend(["--config", str(ugrep_config)])
+                logger.debug(f"Using ugrep with config: {ugrep_config}")
+            else:
+                logger.warning(
+                    f".ugrep config not found at {ugrep_config}, "
+                    "filters may not work. Run config.write_ugrep_config()"
+                )
 
         if fuzzy:
             cmd.append("-Z")
@@ -212,19 +233,6 @@ class UgrepEngine:
                     if not ext.startswith("."):
                         ext = f".{ext}"
                     cmd.extend(["--include", f"*{ext}"])
-            # PDF filter - validate security before using
-            if ".pdf" in self.config.supported_extensions:
-                pdf_filter = self.config.get_filter_for_extension(".pdf")
-                if pdf_filter and self._filter_security.validate_filter_command(pdf_filter):
-                    cmd.append(f"--filter=pdf:{pdf_filter}")
-                elif pdf_filter:
-                    logger.warning(f"PDF filter blocked by security policy: {pdf_filter}")
-        elif path.is_file() and path.suffix.lower() == ".pdf":
-            pdf_filter = self.config.get_filter_for_extension(".pdf")
-            if pdf_filter and self._filter_security.validate_filter_command(pdf_filter):
-                cmd.append(f"--filter=pdf:{pdf_filter}")
-            elif pdf_filter:
-                logger.warning(f"PDF filter blocked by security policy: {pdf_filter}")
 
         cmd.append(query)
         cmd.append(str(path))
@@ -340,6 +348,12 @@ class UgrepEngine:
             matches.append(current_match)
 
         return matches
+
+    def _check_ug_plus_available(self) -> bool:
+        """Check if ug+ command is available."""
+        import shutil
+
+        return shutil.which("ug+") is not None or shutil.which("ug") is not None
 
 
 def check_ugrep_installed() -> bool:

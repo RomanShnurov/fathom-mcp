@@ -9,7 +9,7 @@ from mcp.types import TextContent, Tool
 from pypdf import PdfReader
 
 from ..config import Config
-from ..errors import document_not_found, file_too_large
+from ..errors import document_not_found, file_too_large, filter_execution_error, filter_timeout
 from ..pdf.parallel import ParallelPDFProcessor
 from ..security import FileAccessControl
 
@@ -59,7 +59,168 @@ TOC is only available for PDFs with embedded bookmarks.""",
     ]
 
 
-async def handle_read_tool(name: str, arguments: dict[str, Any], config: Config) -> list[TextContent]:
+def _validate_filter_output(output: bytes, format_ext: str) -> str:
+    """Validate and decode filter output.
+
+    Args:
+        output: Raw bytes from filter
+        format_ext: File extension for context
+
+    Returns:
+        Decoded text string
+
+    Raises:
+        McpError: If output is invalid
+    """
+    # Check output isn't empty
+    if not output:
+        logger.warning(f"Filter for {format_ext} produced empty output")
+        return ""
+
+    # Decode with error handling
+    try:
+        text = output.decode("utf-8")
+        return text
+    except UnicodeDecodeError as e:
+        logger.warning(f"Filter output contains invalid UTF-8 for {format_ext}: {e}")
+        # Try with error replacement
+        return output.decode("utf-8", errors="replace")
+
+
+async def _read_with_filter_streaming(
+    full_path: Path,
+    filter_cmd: str,
+    config: Config,
+) -> str:
+    """Read large document using streaming filter execution.
+
+    Args:
+        full_path: Path to document file
+        filter_cmd: Filter command to execute
+        config: Server configuration
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        McpError: If filter execution fails or times out
+    """
+    import asyncio
+    import shlex
+
+    from ..security import FilterSecurity
+
+    filter_security = FilterSecurity(config)
+
+    # Validate filter command
+    filter_cmd_stdin = config.prepare_filter_for_stdin(filter_cmd)
+    if not filter_security.validate_filter_command(filter_cmd_stdin):
+        raise filter_execution_error(
+            full_path.name, filter_cmd, "Filter command not allowed by security policy"
+        )
+
+    # Parse command for subprocess
+    cmd_parts = shlex.split(filter_cmd_stdin)
+
+    try:
+        # Create subprocess with stdin from file
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_parts,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        # Read file and send to process stdin
+        file_bytes = await asyncio.to_thread(full_path.read_bytes)
+
+        # Communicate with timeout
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(input=file_bytes),
+            timeout=config.security.filter_timeout_seconds,
+        )
+
+        if proc.returncode != 0:
+            error_msg = stderr.decode("utf-8", errors="replace")
+            raise filter_execution_error(full_path.name, filter_cmd, error_msg)
+
+        # Validate and decode output
+        return _validate_filter_output(stdout, full_path.suffix)
+
+    except TimeoutError as te:
+        if proc:
+            proc.kill()
+            await proc.wait()
+        raise filter_timeout(full_path.name, config.security.filter_timeout_seconds) from te
+    except Exception as e:
+        if not isinstance(e, filter_execution_error.__class__):
+            raise filter_execution_error(full_path.name, filter_cmd, str(e)) from e
+        raise
+
+
+async def _read_with_filter(
+    full_path: Path,
+    filter_cmd: str,
+    config: Config,
+    max_size_mb: int = 50,
+) -> str:
+    """Read document using filter command.
+
+    For large files (>50MB), uses streaming to avoid memory issues.
+
+    Args:
+        full_path: Path to document file
+        filter_cmd: Filter command to execute (e.g., "pandoc ...")
+        config: Server configuration
+        max_size_mb: Max size for in-memory processing (default 50MB)
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        McpError: If filter execution fails or times out
+    """
+    import asyncio
+
+    from ..security import FilterSecurity
+
+    # Check file size
+    file_size_mb = full_path.stat().st_size / (1024 * 1024)
+
+    if file_size_mb > max_size_mb:
+        logger.info(f"Large file ({file_size_mb:.1f}MB), using streaming filter")
+        return await _read_with_filter_streaming(full_path, filter_cmd, config)
+
+    try:
+        # Read file bytes
+        file_bytes = await asyncio.to_thread(full_path.read_bytes)
+
+        # Execute filter with security validation
+        filter_security = FilterSecurity(config)
+
+        # Use proper placeholder replacement
+        filter_cmd_stdin = config.prepare_filter_for_stdin(filter_cmd)
+
+        text_bytes = await filter_security.run_secure_filter(
+            filter_cmd_stdin,
+            file_bytes,
+            timeout_override=config.security.filter_timeout_seconds,
+        )
+
+        # Validate and decode output
+        return _validate_filter_output(text_bytes, full_path.suffix)
+
+    except TimeoutError as te:
+        raise filter_timeout(full_path.name, config.security.filter_timeout_seconds) from te
+    except Exception as e:
+        if not isinstance(e, filter_execution_error.__class__):
+            raise filter_execution_error(full_path.name, filter_cmd, str(e)) from e
+        raise
+
+
+async def handle_read_tool(
+    name: str, arguments: dict[str, Any], config: Config
+) -> list[TextContent]:
     """Handle read tool calls."""
     if name == "read_document":
         result = await _read_document(config, arguments)
@@ -91,11 +252,14 @@ async def _read_document(config: Config, args: dict[str, Any]) -> dict[str, Any]
     if size_mb > max_mb:
         raise file_too_large(path, size_mb, max_mb)
 
-    # Read based on format
+    # Get file extension
     ext = full_path.suffix.lower()
 
+    # Get filter command for this extension
+    filter_cmd = config.get_filter_for_extension(ext)
+
+    # === PDF: Special handling with parallel processing ===
     if ext == ".pdf":
-        # Use parallel PDF processor if enabled
         if config.performance.enable_parallel_pdf:
             processor = ParallelPDFProcessor(max_workers=config.performance.max_pdf_workers)
             try:
@@ -114,12 +278,26 @@ async def _read_document(config: Config, args: dict[str, Any]) -> dict[str, Any]
                 processor.shutdown()
         else:
             content, total_pages, pages_read = await asyncio.to_thread(_read_pdf, full_path, pages)
-    else:
-        content = await asyncio.to_thread(full_path.read_text, encoding="utf-8")
+
+    # === Filtered formats: Use filter command ===
+    elif filter_cmd:
+        content = await _read_with_filter(full_path, filter_cmd, config)
+
+        # For filtered documents, treat as single-page
         total_pages = 1
         pages_read = [1]
 
-    # Truncate if needed
+        # Page selection not supported for non-PDF
+        if pages and pages != [1]:
+            logger.warning(f"Page selection not supported for {ext} files, returning all content")
+
+    # === Plain text formats: Direct read ===
+    else:
+        content = await asyncio.to_thread(full_path.read_text, encoding="utf-8", errors="replace")
+        total_pages = 1
+        pages_read = [1]
+
+    # Apply character limit
     max_chars = config.limits.max_document_read_chars
     truncated = len(content) > max_chars
     if truncated:
@@ -167,6 +345,7 @@ async def _get_document_info(config: Config, args: dict[str, Any]) -> dict[str, 
     if not full_path.exists():
         raise document_not_found(path)
 
+    # Base info
     stat = full_path.stat()
     ext = full_path.suffix.lower()
 
@@ -179,6 +358,12 @@ async def _get_document_info(config: Config, args: dict[str, Any]) -> dict[str, 
         "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
     }
 
+    # Get filter command if applicable
+    filter_cmd = config.get_filter_for_extension(ext)
+    if filter_cmd:
+        info["filter"] = filter_cmd.split()[0]  # Just the command name
+
+    # === PDF-specific metadata ===
     if ext == ".pdf":
         # Use parallel PDF processor if enabled for metadata extraction
         if config.performance.enable_parallel_pdf:
@@ -191,13 +376,31 @@ async def _get_document_info(config: Config, args: dict[str, Any]) -> dict[str, 
         else:
             pdf_info = await asyncio.to_thread(_extract_pdf_info, full_path)
             info.update(pdf_info)
+
+    # === Text formats: Add line count ===
+    elif filter_cmd is None:
+        try:
+            content = await asyncio.to_thread(
+                full_path.read_text, encoding="utf-8", errors="replace"
+            )
+            info["pages"] = 1
+            info["lines"] = content.count("\n") + 1
+            info["has_toc"] = False
+            info["toc"] = None
+        except Exception as e:
+            logger.warning(f"Failed to read text file for line count: {e}")
+
+    # === Filtered formats: Add page count estimate ===
     else:
-        # For text files, count lines
-        content = await asyncio.to_thread(full_path.read_text, encoding="utf-8")
-        info["pages"] = 1
-        info["lines"] = content.count("\n") + 1
-        info["has_toc"] = False
-        info["toc"] = None
+        try:
+            # Read through filter to get content
+            text = await _read_with_filter(full_path, filter_cmd, config)
+            # Estimate pages (rough: 500 words per page)
+            word_count = len(text.split())
+            info["estimated_pages"] = max(1, word_count // 500)
+            info["word_count"] = word_count
+        except Exception as e:
+            logger.warning(f"Failed to extract document info: {e}")
 
     return info
 

@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -131,3 +132,59 @@ def pdf_with_toc(rich_knowledge_dir):
         writer.write(f)
 
     return pdf_path
+
+
+# ============================================================================
+# Week 3 Multi-Format Test Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def test_documents(tmp_path):
+    """Copy test documents to temp directory."""
+    fixtures_dir = Path(__file__).parent / "fixtures" / "documents"
+
+    if not fixtures_dir.exists():
+        pytest.skip("Test documents not generated. Run tests/fixtures/generate_documents.py")
+
+    # Copy to temp directory
+    dest_dir = tmp_path / "documents"
+    shutil.copytree(fixtures_dir, dest_dir)
+
+    return dest_dir
+
+
+@pytest.fixture
+def docx_file(test_documents):
+    """Path to sample DOCX file."""
+    return test_documents / "sample.docx"
+
+
+@pytest.fixture
+def html_file(test_documents):
+    """Path to sample HTML file."""
+    return test_documents / "sample.html"
+
+
+@pytest.fixture
+def json_file(test_documents):
+    """Path to sample JSON file."""
+    return test_documents / "sample.json"
+
+
+@pytest.fixture
+def xml_file(test_documents):
+    """Path to sample XML file."""
+    return test_documents / "sample.xml"
+
+
+@pytest.fixture
+def csv_file(test_documents):
+    """Path to sample CSV file."""
+    return test_documents / "sample.csv"
+
+
+@pytest.fixture
+def markdown_file(test_documents):
+    """Path to sample Markdown file."""
+    return test_documents / "sample.md"

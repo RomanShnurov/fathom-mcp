@@ -58,7 +58,9 @@ Supports partial matching.""",
     ]
 
 
-async def handle_browse_tool(name: str, arguments: dict[str, Any], config: Config) -> list[TextContent]:
+async def handle_browse_tool(
+    name: str, arguments: dict[str, Any], config: Config
+) -> list[TextContent]:
     """Handle browse tool calls."""
     if name == "list_collections":
         result = await _list_collections(config, arguments.get("path", ""))
@@ -164,6 +166,7 @@ async def _find_document(config: Config, query: str, limit: int) -> dict[str, An
 
     # Sort by score descending
     from typing import cast
+
     matches.sort(key=lambda x: cast(float, x["score"]), reverse=True)
 
     return {
@@ -193,7 +196,11 @@ def _count_documents(directory: Path, config: Config) -> int:
     """Count documents in directory (non-recursive)."""
     count = 0
     for item in directory.iterdir():
-        if item.is_file() and item.suffix.lower() in config.supported_extensions and not _should_exclude(item, config):
+        if (
+            item.is_file()
+            and item.suffix.lower() in config.supported_extensions
+            and not _should_exclude(item, config)
+        ):
             count += 1
     return count
 

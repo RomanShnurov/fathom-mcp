@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./tests:/app/tests
+      - ./src:/app/src
+      - ./test-reports:/app/test-reports
+    environment:
+      - PYTHONPATH=/app/src
+      - CFS_KNOWLEDGE__ROOT=/app/test-data
+    command: >
+      bash -c "
+        echo 'Running format tests...' &&
+        pytest tests/test_formats.py -v --cov=src/contextfs --cov-report=html:test-reports/coverage &&
+        echo 'Running integration tests...' &&
+        pytest tests/ -v -m integration
+      "

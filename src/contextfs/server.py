@@ -19,7 +19,7 @@ _document_index: DocumentIndex | None = None
 _watcher_manager: WatcherManager | None = None
 
 
-def create_server(config: Config) -> Server:
+async def create_server(config: Config) -> Server:
     """Create and configure MCP server.
 
     Args:
@@ -28,7 +28,25 @@ def create_server(config: Config) -> Server:
     Returns:
         Configured Server instance
     """
+    from .tools.validation import validate_filter_tools
+
     server = Server(config.server.name)
+
+    # Validate filter tools and auto-disable unavailable formats
+    validation_results = await validate_filter_tools(config)
+    enabled_count = sum(1 for available in validation_results.values() if available)
+    total_count = len(validation_results)
+    logger.info(f"Filter tools validated: {enabled_count}/{total_count} formats available")
+
+    # Generate .ugrep config only if filters are available
+    if config.needs_document_filters():
+        try:
+            ugrep_path = config.write_ugrep_config()
+            logger.info(f"Generated .ugrep config: {ugrep_path}")
+        except Exception as e:
+            logger.warning(f"Failed to generate .ugrep config: {e}")
+    else:
+        logger.info("No document filters enabled, skipping .ugrep config generation")
 
     # Register tools, resources, and prompts
     register_all_tools(server, config)
@@ -105,7 +123,7 @@ async def run_server(config: Config) -> None:
     Args:
         config: Server configuration
     """
-    server = create_server(config)
+    server = await create_server(config)
 
     # Initialize performance features
     await _initialize_performance_features(config)

@@ -16,10 +16,11 @@ A Model Context Protocol server that provides AI assistants with direct access t
 - **Smart discovery** - Find documents by name or path patterns
 
 ### Format Support
-- **PDF documents** via poppler-utils text extraction
-- **Markdown files** with full formatting preservation
-- **Plain text** and other common formats
-- **Extensible format system** with configurable filters
+- **Multiple document formats** - PDF, DOCX, HTML, JSON, XML, and more
+- **Automatic format detection** - No manual configuration required
+- **Smart filter integration** - Uses pandoc, jq, and other tools
+- **Graceful degradation** - Formats auto-disabled if tools unavailable
+- See [docs/supported-formats.md](docs/supported-formats.md) for full details
 
 ### Security
 - **Read-only access** - Server never modifies your documents
@@ -41,11 +42,41 @@ sudo apt install ugrep poppler-utils
 brew install ugrep poppler
 ```
 
-### Installing via pip
+## Supported Formats
+
+contextfs supports searching and reading multiple document formats:
+
+### Default Formats (No Additional Tools Required)
+- **Markdown** (.md, .markdown)
+- **Plain Text** (.txt, .rst)
+- **CSV** (.csv)
+- **PDF** (.pdf) - requires pdftotext (from poppler-utils)
+
+### Optional Formats (Requires External Tools)
+- **Microsoft Word** (.doc, .docx) - requires pandoc or antiword
+- **OpenDocument** (.odt) - requires pandoc
+- **EPUB** (.epub) - requires pandoc
+- **HTML** (.html, .htm) - requires pandoc
+- **RTF** (.rtf) - requires pandoc
+- **JSON** (.json) - requires jq
+- **XML** (.xml) - requires pandoc
+
+### Quick Setup for Optional Formats
+
+To enable all optional formats:
 
 ```bash
-pip install contextfs
+# macOS
+brew install pandoc jq
+
+# Linux (Ubuntu/Debian)
+sudo apt install pandoc jq
+
+# Windows (Chocolatey)
+choco install pandoc jq
 ```
+
+See [docs/supported-formats.md](docs/supported-formats.md) for detailed installation instructions, configuration options, and troubleshooting.
 
 ## Collections and Scope
 

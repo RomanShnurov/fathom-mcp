@@ -1,0 +1,79 @@
+name: Format Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-formats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ugrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ugrep
+
+      - name: Install filter tools
+        run: |
+          sudo apt-get install -y \
+            poppler-utils \
+            pandoc \
+            antiword \
+            jq
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Verify filter tools
+        run: |
+          python scripts/verify-filters.py || true
+
+      - name: Generate test documents
+        run: |
+          python tests/fixtures/generate_documents.py
+
+      - name: Run format tests
+        run: |
+          pytest tests/test_formats.py -v --cov=src/contextfs || true
+
+      - name: Run integration tests
+        run: |
+          pytest tests/test_integration_formats.py -v -m integration
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage.xml
+          flags: formats
+
+  docker-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build test image
+        run: |
+          docker build -f Dockerfile.test -t contextfs-test .
+
+      - name: Run tests in Docker
+        run: |
+          docker run --rm contextfs-test
+
+      - name: Extract coverage report
+        run: |
+          docker run --rm -v $(pwd)/test-reports:/app/test-reports contextfs-test \
+            pytest tests/ -v --cov=src/contextfs --cov-report=html:/app/test-reports/coverage || true

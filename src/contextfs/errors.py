@@ -140,3 +140,21 @@ def rate_limited(retry_after_seconds: int) -> McpError:
         message="Too many requests",
         data={"retry_after_seconds": retry_after_seconds},
     )
+
+
+def filter_timeout(filename: str, timeout_seconds: int) -> McpError:
+    """Filter execution timed out."""
+    return McpError(
+        ErrorCode.FILTER_TIMEOUT,
+        f"Filter timeout reading {filename} (>{timeout_seconds}s)",
+        data={"filename": filename, "timeout_seconds": timeout_seconds},
+    )
+
+
+def filter_execution_error(filename: str, filter_cmd: str, error: str) -> McpError:
+    """Filter execution failed."""
+    return McpError(
+        ErrorCode.FILTER_EXECUTION_ERROR,
+        f"Filter failed for {filename}: {filter_cmd} - {error}",
+        data={"filename": filename, "filter_cmd": filter_cmd, "error": error},
+    )
