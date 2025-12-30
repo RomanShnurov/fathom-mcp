@@ -5,9 +5,10 @@ import logging
 
 from mcp.server import Server
 from mcp.types import Resource, ResourceTemplate
+from pydantic import AnyUrl
 
 from .config import Config
-from .errors import McpError, collection_not_found, document_not_found
+from .errors import ErrorCode, McpError, collection_not_found, document_not_found
 from .security import FileAccessControl
 
 logger = logging.getLogger(__name__)
@@ -47,16 +48,33 @@ def register_resources(server: Server, config: Config) -> None:
         ]
 
     @server.read_resource()  # type: ignore
-    async def read_resource(uri: str) -> str:
-        """Read resource content."""
-        logger.debug(f"Reading resource: {uri}")
+    async def read_resource(uri: str | AnyUrl) -> str:
+        """Read resource content.
+
+        Args:
+            uri: Resource URI (string or pydantic AnyUrl from MCP protocol)
+
+        Returns:
+            JSON string with resource content
+
+        Raises:
+            McpError: If resource not found or access denied
+            ValueError: If URI scheme is invalid
+        """
+        # Convert AnyUrl to string for consistent handling
+        uri_str = str(uri)
+        logger.debug(f"Reading resource: {uri_str}")
 
         # Parse URI: knowledge://path/type
-        if not uri.startswith("knowledge://"):
-            logger.warning(f"Invalid URI scheme requested: {uri}")
-            raise ValueError(f"Invalid URI scheme: {uri}")
+        if not uri_str.startswith("knowledge://"):
+            logger.warning(f"Invalid URI scheme requested: {uri_str}")
+            raise McpError(
+                code=ErrorCode.INVALID_PATH,
+                message=f"Invalid URI scheme: expected 'knowledge://', got '{uri_str}'",
+                data={"uri": uri_str},
+            )
 
-        path_and_type = uri[len("knowledge://") :]
+        path_and_type = uri_str[len("knowledge://") :]
 
         try:
             if path_and_type == "index":
@@ -70,14 +88,29 @@ def register_resources(server: Server, config: Config) -> None:
                 path = path_and_type[:-5]  # Remove "/info"
                 return await _get_document_info_resource(config, path)
 
-            logger.warning(f"Unknown resource type requested: {uri}")
-            raise ValueError(f"Unknown resource: {uri}")
+            logger.warning(f"Unknown resource type requested: {uri_str}")
+            raise McpError(
+                code=ErrorCode.INVALID_PATH,
+                message=f"Unknown resource type: {uri_str}",
+                data={
+                    "uri": uri_str,
+                    "valid_patterns": [
+                        "knowledge://index",
+                        "knowledge://{path}/index",
+                        "knowledge://{path}/info",
+                    ],
+                },
+            )
         except McpError:
             # Re-raise MCP errors as-is
             raise
         except Exception as e:
-            logger.error(f"Error reading resource {uri}: {e}")
-            raise
+            logger.error(f"Error reading resource {uri_str}: {e}", exc_info=True)
+            raise McpError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Failed to read resource: {uri_str}",
+                data={"uri": uri_str, "error": str(e)},
+            ) from e
 
 
 async def _get_root_index(config: Config) -> str:

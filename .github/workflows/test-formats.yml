@@ -2,9 +2,9 @@ name: Format Tests
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, developing ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, developing ]
 
 jobs:
   test-formats:
@@ -19,38 +19,45 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install ugrep
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ugrep
-
-      - name: Install filter tools
-        run: |
           sudo apt-get install -y \
+            ugrep \
             poppler-utils \
             pandoc \
             antiword \
             jq
 
+      - name: Install uv
+        run: pip install uv
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
       - name: Install dependencies
-        run: |
-          pip install -e ".[dev]"
+        run: uv sync --extra dev
 
       - name: Verify filter tools
         run: |
-          python scripts/verify-filters.py || true
+          uv run python scripts/verify-filters.py || true
 
       - name: Generate test documents
         run: |
-          python tests/fixtures/generate_documents.py
+          uv run python tests/fixtures/generate_documents.py
 
       - name: Run format tests
         run: |
-          pytest tests/test_formats.py -v --cov=src/contextfs || true
+          uv run pytest tests/test_formats.py -v --cov=src/contextfs || true
 
       - name: Run integration tests
         run: |
-          pytest tests/test_integration_formats.py -v -m integration
+          uv run pytest tests/test_integration_formats.py -v -m integration
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
