@@ -31,4 +31,4 @@ repos:
           - mcp>=1.0.0
           - pypdf>=4.0
         args: [--strict]
-        exclude: ^(tests|scripts)/
+        exclude: ^(tests|scripts|inspector)/

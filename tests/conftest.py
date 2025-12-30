@@ -2,16 +2,20 @@
 
 import shutil
 import tempfile
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 from contextfs.config import Config, KnowledgeConfig
 from contextfs.search.ugrep import UgrepEngine
 
 
 @pytest.fixture
-def temp_knowledge_dir():
+def temp_knowledge_dir() -> AsyncGenerator[Path, None]:
     """Create temporary knowledge directory with sample files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
@@ -35,7 +39,7 @@ def temp_knowledge_dir():
 
 
 @pytest.fixture
-def config(temp_knowledge_dir):
+def config(temp_knowledge_dir: Path) -> Config:
     """Create config with temp directory."""
     return Config(knowledge=KnowledgeConfig(root=temp_knowledge_dir))
 
@@ -46,7 +50,7 @@ def config(temp_knowledge_dir):
 
 
 @pytest.fixture
-def rich_knowledge_dir(temp_knowledge_dir):
+def rich_knowledge_dir(temp_knowledge_dir: Path) -> Path:
     """Extend temp_knowledge_dir with Phase 2-specific test files."""
     root = temp_knowledge_dir
 
@@ -95,19 +99,19 @@ def rich_knowledge_dir(temp_knowledge_dir):
 
 
 @pytest.fixture
-def rich_config(rich_knowledge_dir):
+def rich_config(rich_knowledge_dir: Path) -> Config:
     """Create config with Phase 2 knowledge directory."""
     return Config(knowledge=KnowledgeConfig(root=rich_knowledge_dir))
 
 
 @pytest.fixture
-def search_engine(rich_config):
+def search_engine(rich_config: Config) -> UgrepEngine:
     """Create UgrepEngine instance for Phase 2 tests."""
     return UgrepEngine(rich_config)
 
 
 @pytest.fixture
-def pdf_with_toc(rich_knowledge_dir):
+def pdf_with_toc(rich_knowledge_dir: Path) -> Path:
     """Create a PDF file with table of contents for testing."""
     from pypdf import PdfWriter
 
@@ -140,7 +144,7 @@ def pdf_with_toc(rich_knowledge_dir):
 
 
 @pytest.fixture
-def test_documents(tmp_path):
+def test_documents(tmp_path: Path) -> Path:
     """Copy test documents to temp directory."""
     fixtures_dir = Path(__file__).parent / "fixtures" / "documents"
 
@@ -155,36 +159,98 @@ def test_documents(tmp_path):
 
 
 @pytest.fixture
-def docx_file(test_documents):
+def docx_file(test_documents: Path) -> Path:
     """Path to sample DOCX file."""
     return test_documents / "sample.docx"
 
 
 @pytest.fixture
-def html_file(test_documents):
+def html_file(test_documents: Path) -> Path:
     """Path to sample HTML file."""
     return test_documents / "sample.html"
 
 
 @pytest.fixture
-def json_file(test_documents):
+def json_file(test_documents: Path) -> Path:
     """Path to sample JSON file."""
     return test_documents / "sample.json"
 
 
 @pytest.fixture
-def xml_file(test_documents):
+def xml_file(test_documents: Path) -> Path:
     """Path to sample XML file."""
     return test_documents / "sample.xml"
 
 
 @pytest.fixture
-def csv_file(test_documents):
+def csv_file(test_documents: Path) -> Path:
     """Path to sample CSV file."""
     return test_documents / "sample.csv"
 
 
 @pytest.fixture
-def markdown_file(test_documents):
+def markdown_file(test_documents: Path) -> Path:
     """Path to sample Markdown file."""
     return test_documents / "sample.md"
+
+
+# ============================================================================
+# MCP Integration Test Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def server_params(rich_knowledge_dir: Path) -> StdioServerParameters:
+    """Create StdioServerParameters for connecting to contextfs server.
+
+    Args:
+        rich_knowledge_dir: Path to test knowledge directory
+
+    Returns:
+        Configured StdioServerParameters for MCP server connection
+    """
+    project_root = Path(__file__).parent.parent
+
+    return StdioServerParameters(
+        command="uv",
+        args=["run", "contextfs", "--root", str(rich_knowledge_dir)],
+        cwd=str(project_root),
+    )
+
+
+@pytest_asyncio.fixture(scope="function")
+async def mcp_session(server_params: StdioServerParameters) -> AsyncGenerator[ClientSession, None]:
+    """Create and initialize MCP client session.
+
+    This fixture automatically:
+    - Starts the MCP server via stdio transport
+    - Creates and initializes a ClientSession
+    - Yields the session for test usage
+    - Cleans up resources on test completion
+
+    Args:
+        server_params: Server connection parameters
+
+    Yields:
+        Initialized ClientSession ready for tool/resource/prompt calls
+
+    Example:
+        async def test_my_tool(mcp_session):
+            result = await mcp_session.call_tool("list_collections", arguments={})
+            assert result is not None
+
+    Note:
+        Suppresses anyio cancel scope errors during cleanup due to pytest-asyncio
+        event loop management. This is a known limitation of nested async context
+        managers with anyio TaskGroups.
+    """
+    try:
+        async with stdio_client(server_params) as streams:
+            read_stream, write_stream = streams
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                yield session
+    except RuntimeError as e:
+        # Suppress cancel scope errors during teardown
+        if "cancel scope" not in str(e):
+            raise

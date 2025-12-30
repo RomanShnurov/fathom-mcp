@@ -1,6 +1,7 @@
 """MCP Server setup and lifecycle."""
 
 import logging
+from dataclasses import dataclass
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -14,9 +15,21 @@ from .tools import register_all_tools
 
 logger = logging.getLogger(__name__)
 
-# Global index and watcher instances
-_document_index: DocumentIndex | None = None
-_watcher_manager: WatcherManager | None = None
+
+@dataclass
+class ServerContext:
+    """Context holding server state and dependencies.
+
+    This encapsulates global state to enable better testing and dependency injection.
+    """
+
+    document_index: DocumentIndex | None = None
+    watcher_manager: WatcherManager | None = None
+    config: Config | None = None
+
+
+# Global server context instance
+_server_context: ServerContext = ServerContext()
 
 
 async def create_server(config: Config) -> Server:
@@ -65,16 +78,16 @@ async def _initialize_performance_features(config: Config) -> None:
     Args:
         config: Server configuration
     """
-    global _document_index, _watcher_manager
+    global _server_context
 
     # Initialize document index if enabled
     if config.performance.enable_indexing:
         logger.info("Initializing document index...")
         index_path = config.knowledge.root / config.performance.index_path
-        _document_index = DocumentIndex(config.knowledge.root, index_path)
+        _server_context.document_index = DocumentIndex(config.knowledge.root, index_path)
 
         # Try to load existing index
-        loaded = await _document_index.load_index()
+        loaded = await _server_context.document_index.load_index()
 
         if loaded:
             logger.info("Loaded existing document index")
@@ -84,7 +97,7 @@ async def _initialize_performance_features(config: Config) -> None:
         # Rebuild index on startup if configured
         if config.performance.rebuild_index_on_startup or not loaded:
             logger.info("Building document index...")
-            result = await _document_index.build_index(
+            result = await _server_context.document_index.build_index(
                 formats=config.performance.index_formats,
                 exclude_patterns=config.exclude.patterns,
             )
@@ -96,23 +109,27 @@ async def _initialize_performance_features(config: Config) -> None:
         # Start file watching if enabled
         if config.performance.enable_file_watching:
             logger.info("Starting file watcher for automatic index updates...")
-            _watcher_manager = WatcherManager(config.knowledge.root, _document_index)
-            await _watcher_manager.start(watch_extensions=config.performance.index_formats)
+            _server_context.watcher_manager = WatcherManager(
+                config.knowledge.root, _server_context.document_index
+            )
+            await _server_context.watcher_manager.start(
+                watch_extensions=config.performance.index_formats
+            )
             logger.info("File watcher started")
 
 
 async def _cleanup_performance_features() -> None:
     """Cleanup performance features on shutdown."""
-    global _document_index, _watcher_manager
+    global _server_context
 
-    if _watcher_manager:
+    if _server_context.watcher_manager:
         logger.info("Stopping file watcher...")
-        await _watcher_manager.stop()
+        await _server_context.watcher_manager.stop()
 
-    if _document_index:
+    if _server_context.document_index:
         logger.info("Saving document index...")
         try:
-            await _document_index._save_index()
+            await _server_context.document_index._save_index()
         except Exception as e:
             logger.error(f"Failed to save index: {e}")
 
@@ -148,4 +165,13 @@ def get_document_index() -> DocumentIndex | None:
     Returns:
         DocumentIndex instance if indexing is enabled, None otherwise
     """
-    return _document_index
+    return _server_context.document_index
+
+
+def get_server_context() -> ServerContext:
+    """Get the global server context.
+
+    Returns:
+        Global ServerContext instance
+    """
+    return _server_context

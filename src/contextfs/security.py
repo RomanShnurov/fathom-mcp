@@ -169,22 +169,44 @@ class FilterSecurity:
         Raises:
             subprocess.CalledProcessError: If command fails
         """
-        # Parse command for subprocess
-        # Use shell=True for filter commands since they may contain pipes
-        # This is safe because we validate commands against whitelist
-
         if self.security_config.sandbox_filters:
             # On Unix-like systems, we could use resource limits
             # For now, we rely on timeout and process isolation
             logger.debug(f"Executing sandboxed filter: {command}")
 
-        result = subprocess.run(
-            command,
-            input=input_data,
-            capture_output=True,
-            shell=True,  # Needed for commands like "pdftotext - -"
-            check=True,  # Raise CalledProcessError on non-zero exit
-        )
+        # Parse command into arguments using shlex for safety
+        try:
+            cmd_args = shlex.split(command)
+        except ValueError as e:
+            logger.error(f"Failed to parse filter command: {command} - {e}")
+            raise
+
+        # Check if command contains shell operators (pipes, redirects, etc.)
+        # These require shell=True for proper execution
+        shell_operators = ["|", "||", "&&", ">", "<", ">>", "<<", "&", ";"]
+        needs_shell = any(op in command for op in shell_operators)
+
+        if needs_shell:
+            # Shell=True is required for commands with pipes or other shell features
+            # This is safe because we validate commands against whitelist before execution
+            logger.debug(f"Using shell=True for command with shell operators: {command}")
+            result = subprocess.run(
+                command,
+                input=input_data,
+                capture_output=True,
+                shell=True,
+                check=True,  # Raise CalledProcessError on non-zero exit
+            )
+        else:
+            # Use shell=False for simple commands (more secure)
+            logger.debug(f"Using shell=False for simple command: {cmd_args}")
+            result = subprocess.run(
+                cmd_args,
+                input=input_data,
+                capture_output=True,
+                shell=False,  # More secure for simple commands
+                check=True,  # Raise CalledProcessError on non-zero exit
+            )
 
         return result.stdout
 

@@ -52,6 +52,10 @@ dev = [
     "python-docx>=1.0",
     "pre-commit>=3.0",
 ]
+inspector = [
+    "streamlit>=1.31.0",
+    "nest-asyncio>=1.6.0",
+]
 
 [project.scripts]
 contextfs = "contextfs.__main__:main"
@@ -85,7 +89,10 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]  # Line length handled by formatter
+ignore = [
+    "E501",  # Line length handled by formatter
+    "SIM117",  # Allow nested with statements for clarity in tests
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["contextfs"]
@@ -98,12 +105,16 @@ warn_unused_ignores = true
 exclude = [
     "^tests/",
     "^scripts/",
+    "^inspector/",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
 
 [tool.coverage.run]
 source = ["src/contextfs"]

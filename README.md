@@ -543,19 +543,36 @@ security:
 
 ## Debugging
 
-Since MCP servers run over stdio, debugging can be challenging. For the best debugging experience, I recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+Since MCP servers run over stdio, debugging can be challenging. contextfs provides two options for interactive testing.
+
+### Built-in MCP Inspector (Recommended)
+
+contextfs includes a Streamlit-based inspector UI for testing server tools, resources, and prompts:
+
+```bash
+# Install inspector dependencies
+uv sync --extra inspector
+
+# Run the inspector
+streamlit run inspector/app.py
+```
+
+The built-in Inspector provides:
+- Interactive tool testing with dynamic forms
+- Resource browsing and content reading
+- Prompt listing and inspection
+- Real-time server logs with filtering
+- No external dependencies (Node.js not required)
+
+### External MCP Inspector
+
+Alternatively, use the official [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
 npx @modelcontextprotocol/inspector contextfs --root /path/to/documents
 ```
 
-The Inspector provides:
-- Interactive tool testing
-- Request/response inspection
-- Server log monitoring
-- Real-time debugging
-
-You can also use the MCP Inspector to test different configurations:
+You can also use it with configuration files:
 
 ```bash
 npx @modelcontextprotocol/inspector contextfs --config config.yaml
