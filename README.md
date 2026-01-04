@@ -1,5 +1,11 @@
 # Fathom MCP
 
+[![PyPI version](https://badge.fury.io/py/fathom-mcp.svg)](https://badge.fury.io/py/fathom-mcp)
+[![Python versions](https://img.shields.io/pypi/pyversions/fathom-mcp.svg)](https://pypi.org/project/fathom-mcp/)
+[![Tests and Quality](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/tests-and-quality.yaml/badge.svg)](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/tests-and-quality.yaml)
+[![Integration - Document Formats](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/integration-formats.yaml/badge.svg)](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/integration-formats.yaml)
+[![codecov](https://codecov.io/gh/RomanShnurov/fathom-mcp/branch/master/graph/badge.svg)](https://codecov.io/gh/RomanShnurov/fathom-mcp)
+
 A Model Context Protocol server that provides AI assistants with direct access to local document collections through file-first search capabilities.
 
 ## Features
@@ -29,6 +35,20 @@ A Model Context Protocol server that provides AI assistants with direct access t
 - **Whitelist enforcement** - Shell filters validated before execution
 
 ## Installation
+
+### From PyPI (Recommended)
+
+Install Fathom MCP directly from PyPI:
+
+```bash
+pip install fathom-mcp
+```
+
+Or with uv:
+
+```bash
+uv pip install fathom-mcp
+```
 
 ### System Dependencies
 
