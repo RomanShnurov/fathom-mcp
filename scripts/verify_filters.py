@@ -80,7 +80,7 @@ def verify_ugrep_config(config_path: Path) -> tuple[bool, list[str]]:
     return len(issues) == 0, issues
 
 
-def main():
+def main() -> None:
     print("=" * 60)
     print("fathom-mcp Filter Tool Verification")
     print("=" * 60)
