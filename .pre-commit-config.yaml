@@ -30,5 +30,6 @@ repos:
           - types-PyYAML
           - mcp>=1.0.0
           - pypdf>=4.0
+          - tenacity>=8.0
         args: [--strict]
         exclude: ^(tests|scripts|inspector)/

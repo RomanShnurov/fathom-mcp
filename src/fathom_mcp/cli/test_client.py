@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, model_validator
 from pydantic_core import ValidationError
-from tenacity import (  # type: ignore
+from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -185,7 +185,7 @@ class MCPTestClient:
             finally:
                 self.transport_context = None
 
-    @retry(  # type: ignore
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception_type((ConnectionError, TimeoutError)),
