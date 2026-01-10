@@ -4,19 +4,6 @@ import pytest
 
 
 @pytest.mark.benchmark
-def test_config_generation_performance(benchmark, config) -> None:
-    """Benchmark .ugrep config generation."""
-    config.formats["word_docx"].enabled = True
-    config.formats["html"].enabled = True
-    config.formats["json"].enabled = True
-
-    result = benchmark(config.generate_ugrep_config)
-    assert len(result) > 0
-    # Should complete in <10ms
-    assert benchmark.stats["mean"] < 0.01
-
-
-@pytest.mark.benchmark
 def test_filter_placeholder_performance(benchmark, config) -> None:
     """Benchmark filter placeholder replacement."""
     filter_cmd = "pandoc --wrap=preserve -f docx -t plain % -o -"

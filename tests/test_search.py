@@ -679,7 +679,7 @@ async def test_diagnostic_ugrep_direct(rich_knowledge_dir):
 
 
 # ============================================================================
-# Phase 2: Parallel Search Tests (search_multiple)
+# Parallel Search Tests (search_multiple)
 # ============================================================================
 
 

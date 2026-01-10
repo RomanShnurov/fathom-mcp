@@ -1,6 +1,7 @@
 """Configuration management with Pydantic."""
 
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import yaml
@@ -19,7 +20,10 @@ class FormatConfig(BaseModel):
 class SearchConfig(BaseModel):
     """Search engine settings."""
 
-    engine: Literal["ugrep"] = "ugrep"
+    engine: Literal["ugrep"] = Field(
+        default="ugrep",
+        description="Search engine to use (currently only ugrep supported, reserved for future engines)",
+    )
     context_lines: int = Field(default=5, ge=0, le=50)
     max_results: int = Field(default=50, ge=1, le=500)
     max_file_size_mb: int = Field(default=100, ge=1)
@@ -124,7 +128,7 @@ class SecurityConfig(BaseModel):
     allowed_filter_commands: list[str] = Field(
         default_factory=lambda: [
             "pdftotext",
-            "pdftotext - -",
+            "pdftotext % -",
             "pandoc",
             "antiword",
             "jq",
@@ -175,6 +179,307 @@ class SecurityConfig(BaseModel):
     )
 
 
+class HTTPLimitsConfig(BaseModel):
+    """HTTP request/response limits and timeouts.
+
+    These settings control resource usage and prevent DoS attacks.
+    Adjust based on your deployment requirements.
+    """
+
+    max_request_body_size: int = Field(
+        default=10 * 1024 * 1024,  # 10 MB
+        ge=1024,  # min 1KB
+        le=100 * 1024 * 1024,  # max 100MB
+        description="Maximum request body size in bytes",
+    )
+
+    max_concurrent_connections: int = Field(
+        default=100,
+        ge=1,
+        le=10000,
+        description="Maximum concurrent HTTP connections",
+    )
+
+    connection_timeout: int = Field(
+        default=60,
+        ge=5,
+        le=300,
+        description="Connection timeout in seconds",
+    )
+
+    read_timeout: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Read timeout in seconds (for long-running operations)",
+    )
+
+    write_timeout: int = Field(
+        default=60,
+        ge=5,
+        le=300,
+        description="Write timeout in seconds",
+    )
+
+    keepalive_timeout: int = Field(
+        default=5,
+        ge=0,
+        le=300,
+        description="Keep-alive timeout in seconds",
+    )
+
+
+class TransportConfig(BaseModel):
+    """Transport protocol configuration with production security.
+
+    Configures the MCP server transport layer. Supports:
+    - stdio: Standard input/output (default, for Claude Desktop)
+    - streamable-http: Streamable HTTP protocol
+
+    Attributes:
+        type: Transport protocol type (stdio, streamable-http)
+        host: Server host address (127.0.0.1 for local, 0.0.0.0 for Docker)
+        port: Server port number (>= 1024 for non-root)
+        base_path: Streamable HTTP endpoint path (default: /mcp)
+        healthcheck_endpoint: Health check endpoint path (default: /_health)
+        enable_cors: Enable CORS middleware (default: False)
+        allowed_origins: CORS allowed origins (never use ["*"] in production!)
+        allowed_methods: CORS allowed HTTP methods
+        allowed_headers: CORS allowed headers
+        max_age: CORS preflight cache duration in seconds
+        limits: HTTP request/response limits
+        log_level: Uvicorn log level
+        structured_logging: Use JSON logs (recommended for production)
+        access_log: Enable HTTP access log
+        reload: Auto-reload for development (disable in production)
+
+    Security:
+        - CORS wildcard (*) is BLOCKED in production environment
+        - Origins must use http:// or https:// protocol
+        - Port must be >= 1024 for non-root users
+        - Default port 8765 avoids common conflicts
+        - Structured logging recommended for production
+
+    Examples:
+        Stdio transport (default):
+            >>> config = TransportConfig()
+            >>> config.type
+            'stdio'
+
+        HTTP transport for Docker:
+            >>> config = TransportConfig(
+            ...     type="streamable-http",
+            ...     host="0.0.0.0",
+            ...     port=8765,
+            ...     enable_cors=True,
+            ...     allowed_origins=["https://app.example.com"],
+            ...     structured_logging=True,
+            ... )
+
+        From environment variables:
+            >>> os.environ["FMCP_TRANSPORT__TYPE"] = "streamable-http"
+            >>> os.environ["FMCP_TRANSPORT__PORT"] = "8765"
+            >>> config = Config()
+            >>> config.transport.type
+            'streamable-http'
+
+    Environment Variables:
+        All fields can be overridden via FMCP_TRANSPORT__* variables:
+        - FMCP_TRANSPORT__TYPE=streamable-http
+        - FMCP_TRANSPORT__HOST=0.0.0.0
+        - FMCP_TRANSPORT__PORT=8765
+        - FMCP_TRANSPORT__ENABLE_CORS=true
+        - FMCP_TRANSPORT__ALLOWED_ORIGINS='["https://app.example.com"]'
+
+    See Also:
+        - HTTPLimitsConfig: HTTP-specific limits and timeouts
+        - Config: Main configuration class
+        - create_http_app: Creates Starlette app from this config
+    """
+
+    # Transport type
+    type: Literal["stdio", "streamable-http"] = Field(
+        default="stdio",
+        description="Transport protocol type",
+    )
+
+    # HTTP settings (ignored for stdio)
+    host: str = Field(
+        default="127.0.0.1",
+        description="Server host address (use 0.0.0.0 for Docker)",
+    )
+
+    port: int = Field(
+        default=8765,
+        ge=1024,
+        le=65535,
+        description="Server port number (must be >= 1024 for non-root)",
+    )
+
+    # Endpoints
+    base_path: str = Field(
+        default="/mcp",
+        description="Streamable HTTP endpoint path",
+    )
+
+    healthcheck_endpoint: str = Field(
+        default="/_health",
+        description="Health check endpoint path",
+    )
+
+    # CORS Security (CRITICAL #7)
+    enable_cors: bool = Field(
+        default=False,
+        description="Enable CORS middleware (disabled by default for security)",
+    )
+
+    allowed_origins: list[str] = Field(
+        default_factory=list,
+        description="CORS allowed origins (never use ['*'] in production!)",
+    )
+
+    allowed_methods: list[str] = Field(
+        default_factory=lambda: ["GET", "POST", "OPTIONS"],
+        description="CORS allowed HTTP methods",
+    )
+
+    allowed_headers: list[str] = Field(
+        default_factory=lambda: ["Content-Type"],
+        description="CORS allowed headers",
+    )
+
+    max_age: int = Field(
+        default=600,
+        ge=0,
+        le=86400,
+        description="CORS preflight cache duration in seconds",
+    )
+
+    limits: HTTPLimitsConfig = Field(
+        default_factory=HTTPLimitsConfig,
+        description="HTTP request/response limits",
+    )
+
+    # Logging
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
+        default="INFO",
+        description="Uvicorn log level",
+    )
+
+    structured_logging: bool = Field(
+        default=False,
+        description="Use structured JSON logging (recommended for production)",
+    )
+
+    access_log: bool = Field(
+        default=True,
+        description="Enable HTTP access log",
+    )
+
+    reload: bool = Field(
+        default=False,
+        description="Auto-reload for development (disable in production)",
+    )
+
+    # Validators
+    @field_validator("allowed_origins")
+    @classmethod
+    def validate_cors_origins(cls, v: list[str]) -> list[str]:
+        """Validate CORS origins with strict security checks.
+
+        CRITICAL #7: Blocks wildcard (*) in production environment.
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Check for wildcard
+        if "*" in v:
+            # Only allow wildcard in development
+            env = os.getenv("ENVIRONMENT", "production").lower()
+            if env == "production":
+                raise ValueError(
+                    "Wildcard CORS origin (*) is FORBIDDEN in production. "
+                    "Set specific origins in transport.allowed_origins. "
+                    "Example: allowed_origins: ['https://app.example.com']"
+                )
+            logger.warning(
+                "⚠️  CORS allows ALL origins (*). "
+                "This is ONLY safe for development. "
+                "NEVER use in production!"
+            )
+
+        # Validate origin format
+        for origin in v:
+            if origin == "*":
+                continue
+
+            # Must be valid URL
+            if not origin.startswith(("http://", "https://")):
+                raise ValueError(
+                    f"Invalid CORS origin '{origin}': must start with http:// or https://. "
+                    f"Example: 'https://app.example.com'"
+                )
+
+            # Warn about http:// in production
+            if origin.startswith("http://") and "localhost" not in origin:
+                env = os.getenv("ENVIRONMENT", "production").lower()
+                if env == "production":
+                    logger.warning(
+                        f"⚠️  CORS origin '{origin}' uses insecure HTTP. "
+                        f"Consider using HTTPS in production."
+                    )
+
+        return v
+
+    @field_validator("allowed_methods")
+    @classmethod
+    def validate_allowed_methods(cls, v: list[str]) -> list[str]:
+        """Validate HTTP methods."""
+        valid_methods = {"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"}
+
+        for method in v:
+            if method.upper() not in valid_methods:
+                raise ValueError(
+                    f"Invalid HTTP method: {method}. Valid methods: {', '.join(valid_methods)}"
+                )
+
+        return [m.upper() for m in v]
+
+    @field_validator("base_path", "healthcheck_endpoint")
+    @classmethod
+    def validate_url_path(cls, v: str) -> str:
+        """Ensure URL paths use forward slashes (cross-platform).
+
+        Converts to POSIX paths even on Windows.
+        This ensures HTTP URL paths always use forward slashes,
+        regardless of the platform.
+
+        Args:
+            v: URL path to validate
+
+        Returns:
+            Normalized POSIX path with forward slashes
+
+        Examples:
+            >>> TransportConfig.validate_url_path("\\mcp")
+            '/mcp'
+            >>> TransportConfig.validate_url_path("mcp")
+            '/mcp'
+            >>> TransportConfig.validate_url_path("/_health")
+            '/_health'
+        """
+        # Convert to POSIX path (forward slashes)
+        posix_path = PurePosixPath(v)
+
+        # Ensure starts with /
+        path_str = str(posix_path)
+        if not path_str.startswith("/"):
+            return f"/{path_str}"
+
+        return path_str
+
+
 class ServerConfig(BaseModel):
     """Server metadata."""
 
@@ -214,12 +519,16 @@ class Config(BaseSettings):
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
+    transport: TransportConfig = Field(
+        default_factory=TransportConfig,
+        description="Transport protocol configuration",
+    )
     formats: dict[str, FormatConfig] = Field(
         default_factory=lambda: {
             # === Existing formats ===
             "pdf": FormatConfig(
                 extensions=[".pdf"],
-                filter="pdftotext - -",
+                filter="pdftotext % -",
                 enabled=True,  # Already working
             ),
             "markdown": FormatConfig(
@@ -335,104 +644,6 @@ class Config(BaseSettings):
             return filter_cmd[:-2] + " -"
         # If no %, assume stdin already
         return filter_cmd
-
-    def generate_ugrep_config(self) -> str:
-        """Generate .ugrep configuration file content.
-
-        Returns:
-            String content for .ugrep file
-        """
-        import shlex
-        from datetime import datetime
-
-        lines = [
-            "### Generated by fathom-mcp MCP server",
-            f"### Knowledge root: {self.knowledge.root}",
-            f"### Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "",
-            "# Document filters",
-        ]
-
-        # Add filter for each enabled format
-        for _fmt_name, fmt_config in self.formats.items():
-            if not fmt_config.enabled or not fmt_config.filter:
-                continue
-
-            # Build extension list
-            exts = ",".join(ext.lstrip(".") for ext in fmt_config.extensions)
-
-            # Use shlex.quote for proper escaping on all platforms (Windows-safe)
-            filter_spec = f"{exts}:{fmt_config.filter}"
-            lines.append(f"--filter={shlex.quote(filter_spec)}")
-
-        # Add performance settings from search config
-        lines.extend(
-            [
-                "",
-                "# Performance settings",
-                f"--context={self.search.context_lines}",
-                f"--max-count={self.search.max_results}",
-                "",
-                "# UI preferences",
-                "--color=always",
-                "--line-number",
-                "--with-filename",
-            ]
-        )
-
-        return "\n".join(lines) + "\n"
-
-    def get_ugrep_config_path(self) -> Path:
-        """Get path for .ugrep configuration file.
-
-        Uses temp directory to avoid modifying user's document directory.
-
-        Returns:
-            Path to .ugrep file location
-        """
-        import tempfile
-
-        # Use temp directory with hash to make it unique per knowledge root
-        root_hash = abs(hash(str(self.knowledge.root)))
-        ugrep_filename = f".ugrep-fathom-mcp-{root_hash}"
-        return Path(tempfile.gettempdir()) / ugrep_filename
-
-    def write_ugrep_config(self) -> Path:
-        """Write .ugrep configuration file with atomic write.
-
-        Returns:
-            Path to created .ugrep file
-
-        Raises:
-            ConfigError: If file cannot be written
-        """
-        import logging
-        import tempfile
-
-        logger = logging.getLogger(__name__)
-        ugrep_path = self.get_ugrep_config_path()
-        content = self.generate_ugrep_config()
-
-        try:
-            # Atomic write: write to temp file, then move
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                suffix=".ugrep",
-                dir=ugrep_path.parent,
-                delete=False,
-            ) as tmp:
-                tmp.write(content)
-                tmp_path = Path(tmp.name)
-
-            # Atomic rename (POSIX) or move (Windows)
-            tmp_path.replace(ugrep_path)
-            logger.info(f"Generated .ugrep config at {ugrep_path}")
-            return ugrep_path
-
-        except (OSError, PermissionError) as e:
-            logger.error(f"Failed to write .ugrep config to {ugrep_path}: {e}")
-            raise ConfigError(f"Cannot write .ugrep configuration: {e}") from e
 
 
 class ConfigError(Exception):

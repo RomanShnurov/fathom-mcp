@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import contextlib
 import shutil
 import tempfile
 from collections.abc import AsyncGenerator
@@ -45,13 +46,13 @@ def config(temp_knowledge_dir: Path) -> Config:
 
 
 # ============================================================================
-# Phase 2 Shared Fixtures
+# Shared Fixtures
 # ============================================================================
 
 
 @pytest.fixture
 def rich_knowledge_dir(temp_knowledge_dir: Path) -> Path:
-    """Extend temp_knowledge_dir with Phase 2-specific test files."""
+    """Extend temp_knowledge_dir with additional test files."""
     root = temp_knowledge_dir
 
     # Ensure directories exist
@@ -100,13 +101,13 @@ def rich_knowledge_dir(temp_knowledge_dir: Path) -> Path:
 
 @pytest.fixture
 def rich_config(rich_knowledge_dir: Path) -> Config:
-    """Create config with Phase 2 knowledge directory."""
+    """Create config with extended knowledge directory."""
     return Config(knowledge=KnowledgeConfig(root=rich_knowledge_dir))
 
 
 @pytest.fixture
 def search_engine(rich_config: Config) -> UgrepEngine:
-    """Create UgrepEngine instance for Phase 2 tests."""
+    """Create UgrepEngine instance for extended tests."""
     return UgrepEngine(rich_config)
 
 
@@ -254,3 +255,171 @@ async def mcp_session(server_params: StdioServerParameters) -> AsyncGenerator[Cl
         # Suppress cancel scope errors during teardown
         if "cancel scope" not in str(e):
             raise
+
+
+# ============================================================================
+# HTTP Server Fixture
+# ============================================================================
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def http_server(tmp_path: Path, monkeypatch):
+    """Start HTTP server in background for integration testing.
+
+    Proper server lifecycle with health check wait.
+
+    Yields:
+        Dict with server URL and config
+    """
+    import asyncio
+
+    import httpx
+    import uvicorn
+
+    from fathom_mcp.config import Config
+    from fathom_mcp.server import create_server
+    from fathom_mcp.transports import create_http_app
+
+    # Setup test config
+    knowledge_root = tmp_path / "knowledge"
+    knowledge_root.mkdir()
+    (knowledge_root / "test.md").write_text("# Test Document\n\nTest content")
+
+    monkeypatch.setenv("FMCP_KNOWLEDGE__ROOT", str(knowledge_root))
+    monkeypatch.setenv("FMCP_TRANSPORT__TYPE", "streamable-http")
+    monkeypatch.setenv("FMCP_TRANSPORT__HOST", "127.0.0.1")
+    monkeypatch.setenv("FMCP_TRANSPORT__PORT", "18765")
+
+    config = Config()
+
+    # Create server and app
+    server = await create_server(config)
+    app = await create_http_app(server, config)
+
+    # Start uvicorn in background
+    uvicorn_config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=18765,
+        log_level="error",
+    )
+    uvicorn_server = uvicorn.Server(uvicorn_config)
+    server_task = asyncio.create_task(uvicorn_server.serve())
+
+    # Wait for server to be ready
+    async def wait_for_server(timeout: float = 5.0) -> None:
+        """Wait for server health check."""
+        start = asyncio.get_event_loop().time()
+        async with httpx.AsyncClient() as client:
+            while True:
+                try:
+                    response = await client.get("http://127.0.0.1:18765/_health")
+                    if response.status_code == 200:
+                        return
+                except httpx.ConnectError:
+                    pass
+
+                if asyncio.get_event_loop().time() - start > timeout:
+                    raise TimeoutError("Server failed to start")
+
+                await asyncio.sleep(0.1)
+
+    try:
+        await wait_for_server()
+        yield {
+            "url": "http://127.0.0.1:18765",
+            "config": config,
+        }
+    finally:
+        # Graceful shutdown
+        uvicorn_server.should_exit = True
+        try:
+            await asyncio.wait_for(server_task, timeout=5.0)
+        except TimeoutError:
+            server_task.cancel()
+
+
+# ============================================================================
+# HTTP Client Fixtures
+# ============================================================================
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def http_client():
+    """HTTP client with test timeouts.
+
+    Reusable HTTP client for tests.
+    """
+    import httpx
+
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(10.0, connect=5.0),
+        follow_redirects=True,
+    ) as client:
+        yield client
+
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def mcp_http_session(http_server):
+    """MCP ClientSession over HTTP transport.
+
+    Pre-initialized MCP session for tests.
+
+    Note: Uses manual context manager handling to avoid pytest-asyncio
+    teardown issues with nested async context managers.
+    """
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    url = f"{http_server['url']}/mcp"
+
+    # Manually manage context managers to avoid teardown issues
+    http_ctx = streamable_http_client(url)
+    read, write, _get_session_id = await http_ctx.__aenter__()
+
+    session_ctx = ClientSession(read, write)
+    session = await session_ctx.__aenter__()
+    await session.initialize()
+
+    try:
+        yield session
+    finally:
+        # Clean up in reverse order
+        with contextlib.suppress(Exception):
+            await session_ctx.__aexit__(None, None, None)
+        with contextlib.suppress(Exception):
+            await http_ctx.__aexit__(None, None, None)
+
+
+# ============================================================================
+# Async Cleanup Verification
+# ============================================================================
+
+
+@pytest_asyncio.fixture(autouse=True, loop_scope="function")
+async def verify_no_leaked_tasks():
+    """Ensure no async tasks leaked after each test.
+
+    Catches resource leaks early.
+    """
+    import asyncio
+
+    yield
+
+    # Get all running tasks
+    tasks = [t for t in asyncio.all_tasks() if not t.done()]
+
+    # Exclude current task
+    current_task = asyncio.current_task()
+    tasks = [t for t in tasks if t != current_task]
+
+    if tasks:
+        # Cancel leaked tasks
+        for task in tasks:
+            task.cancel()
+
+        # Wait for cancellation
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Fail test
+        pytest.fail(f"Test leaked {len(tasks)} async tasks: {[t.get_name() for t in tasks]}")

@@ -1,6 +1,5 @@
 """Tests for multi-format document support."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,14 +10,11 @@ from fathom_mcp.search.ugrep import UgrepEngine
 
 @pytest.mark.asyncio
 async def test_ug_plus_command_generation(tmp_path):
-    """Test that ug+ is used when formats with filters are enabled."""
+    """Test that ugrep command is built with programmatic filter arguments."""
     # Set knowledge root and enable formats with filters
     config = Config(knowledge=KnowledgeConfig(root=str(tmp_path)))
     config.formats["word_docx"].enabled = True
     config.formats["epub"].enabled = True
-
-    # Generate .ugrep config
-    ugrep_config_path = config.write_ugrep_config()
 
     engine = UgrepEngine(config)
 
@@ -31,20 +27,24 @@ async def test_ug_plus_command_generation(tmp_path):
     )
 
     # Validate command structure
-    assert cmd[0] == "ugrep"  # Always uses ugrep (ug+ is just an alias)
+    assert cmd[0] == "ugrep"  # Always uses ugrep
     assert "-%" in cmd  # Boolean mode
     assert "-i" in cmd  # Case insensitive
     assert "-C3" in cmd  # Context lines
 
-    # Verify config file reference
-    assert "--config" in cmd
-    config_index = cmd.index("--config")
-    assert cmd[config_index + 1] == str(ugrep_config_path)
+    # Verify that filters are built programmatically (not via --config file)
+    # Should have --filter arguments directly in command
+    filter_args = [arg for arg in cmd if arg.startswith("--filter=")]
+    assert len(filter_args) >= 2  # Should have at least docx and epub filters
 
-    # Verify config file content
-    config_content = ugrep_config_path.read_text()
-    assert "--filter=" in config_content
-    assert "docx:" in config_content or "epub:" in config_content
+    # Verify filter content
+    filter_str = " ".join(filter_args)
+    assert "docx:" in filter_str
+    assert "epub:" in filter_str
+    assert "pandoc" in filter_str
+
+    # Should NOT use deprecated --config approach
+    assert "--config" not in cmd
 
 
 @pytest.mark.asyncio
@@ -78,11 +78,10 @@ async def test_ugrep_command_when_no_filters(tmp_path):
 
 @pytest.mark.asyncio
 async def test_ugrep_config_file_usage(tmp_path):
-    """Test that .ugrep config file is referenced correctly."""
-    # Set knowledge root and create .ugrep file
+    """Test that filter arguments are built programmatically (not via config file)."""
+    # Set knowledge root
     config = Config(knowledge=KnowledgeConfig(root=str(tmp_path)))
     config.formats["word_docx"].enabled = True
-    ugrep_path = config.write_ugrep_config()
 
     engine = UgrepEngine(config)
     cmd = engine._build_command(
@@ -93,13 +92,14 @@ async def test_ugrep_config_file_usage(tmp_path):
         fuzzy=False,
     )
 
-    # Verify config path in command
-    assert "--config" in cmd
-    config_index = cmd.index("--config")
-    assert Path(cmd[config_index + 1]) == ugrep_path
+    # Verify that filters are built programmatically
+    # Should NOT use --config file
+    assert "--config" not in cmd
 
-    # Verify file is in temp directory, not knowledge root
-    assert ugrep_path.parent != tmp_path
+    # Should have --filter argument directly
+    filter_args = [arg for arg in cmd if arg.startswith("--filter=")]
+    assert len(filter_args) >= 1
+    assert any("docx:" in arg for arg in filter_args)
 
 
 @pytest.mark.asyncio
@@ -107,7 +107,6 @@ async def test_multi_format_search_mock(tmp_path):
     """Test multi-format search with mocked execution."""
     config = Config(knowledge=KnowledgeConfig(root=str(tmp_path)))
     config.formats["word_docx"].enabled = True
-    config.write_ugrep_config()
 
     engine = UgrepEngine(config)
 
@@ -137,27 +136,6 @@ async def test_multi_format_search_mock(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_config_file_generated_with_filters(tmp_path):
-    """Test .ugrep config file contains correct filter definitions."""
-    config = Config(knowledge=KnowledgeConfig(root=str(tmp_path)))
-
-    # Enable multiple formats
-    config.formats["word_docx"].enabled = True
-    config.formats["epub"].enabled = True
-    config.formats["json"].enabled = True
-
-    ugrep_path = config.write_ugrep_config()
-    content = ugrep_path.read_text()
-
-    # Verify all filters are present
-    assert "docx:" in content
-    assert "epub:" in content
-    assert "json:" in content
-    assert "pandoc" in content
-    assert "jq" in content
-
-
-@pytest.mark.asyncio
 async def test_check_ug_plus_available(tmp_path):
     """Test ug+ availability check."""
     config = Config(knowledge=KnowledgeConfig(root=str(tmp_path)))
@@ -167,23 +145,6 @@ async def test_check_ug_plus_available(tmp_path):
     result = engine._check_ug_plus_available()
     # Result depends on system, just verify it returns a boolean
     assert isinstance(result, bool)
-
-
-@pytest.mark.asyncio
-async def test_ugrep_config_path_uniqueness(tmp_path):
-    """Test that different knowledge roots get different .ugrep config paths."""
-    import tempfile
-
-    config1 = Config(knowledge=KnowledgeConfig(root=str(tmp_path)))
-    path1 = config1.get_ugrep_config_path()
-
-    # Create another temp directory
-    with tempfile.TemporaryDirectory() as tmp_path2:
-        config2 = Config(knowledge=KnowledgeConfig(root=str(tmp_path2)))
-        path2 = config2.get_ugrep_config_path()
-
-        # Paths should be different for different roots
-        assert path1 != path2
 
 
 @pytest.mark.asyncio

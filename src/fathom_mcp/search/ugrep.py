@@ -11,6 +11,7 @@ from ..config import Config
 from ..errors import search_engine_error, search_timeout
 from ..security import FilterSecurity
 from .cache import SearchCache, SmartSearchCache
+from .filter_builder import FilterArgumentsBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class UgrepEngine:
 
         self._semaphore = asyncio.Semaphore(config.limits.max_concurrent_searches)
         self._filter_security = FilterSecurity(config)
+        self._filter_builder = FilterArgumentsBuilder(config)
         self._use_smart_cache = isinstance(self.cache, SmartSearchCache)
 
     async def search(
@@ -190,10 +192,10 @@ class UgrepEngine:
         context_lines: int,
         fuzzy: bool,
     ) -> list[str]:
-        """Build ugrep command with optional document filtering.
+        """Build ugrep command with programmatic filter arguments.
 
-        Uses ugrep with --config when document formats with filters are enabled.
-        Note: ug+ is just an alias for ugrep, both support filters via --config.
+        Constructs command-line arguments directly instead of using .ugrep config file.
+        This approach provides better transparency and cross-platform compatibility.
         """
         cmd = [
             "ugrep",
@@ -204,42 +206,31 @@ class UgrepEngine:
             "--with-filename",  # Always include filename in output
         ]
 
-        # Add .ugrep config file path if filters are needed
-        # Use filters only if at least one format actually requires a filter command
-        use_filters = self.config.needs_document_filters()
-        if use_filters:
-            ugrep_config = self.config.get_ugrep_config_path()
-            if ugrep_config.exists():
-                cmd.extend(["--config", str(ugrep_config)])
-                logger.debug(f"Using ugrep with config: {ugrep_config}")
-            else:
-                logger.warning(
-                    f".ugrep config not found at {ugrep_config}, "
-                    "filters may not work. Run config.write_ugrep_config()"
-                )
+        # Add filter arguments programmatically if needed
+        if self._filter_builder.has_filters():
+            filter_args = self._filter_builder.build_filter_args()
+            if filter_args:
+                cmd.extend(filter_args)
+                logger.debug(f"Added {len(filter_args)} filter argument(s)")
+                for arg in filter_args:
+                    logger.debug(f"  Filter: {arg}")
 
         if fuzzy:
             cmd.append("-Z")
 
         if recursive and path.is_dir():
             cmd.append("-r")
-            # Add filters for supported formats
-            # Build a combined pattern for all extensions
+            # Add file extension filters
             extensions = sorted(self.config.supported_extensions)
             if extensions:
-                # Use glob pattern for each extension
                 for ext in extensions:
                     # Ensure extension starts with dot
                     if not ext.startswith("."):
                         ext = f".{ext}"
                     cmd.extend(["--include", f"*{ext}"])
 
-        # When using --config, pattern must be specified with -e flag
-        # Otherwise ugrep treats it as a file path
-        if use_filters:
-            cmd.extend(["-e", query])
-        else:
-            cmd.append(query)
+        # Add query pattern
+        cmd.append(query)
         cmd.append(str(path))
 
         return cmd

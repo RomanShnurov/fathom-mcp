@@ -126,7 +126,7 @@ When the server starts, it generates a `.ugrep` configuration file in your syste
 ### Knowledge root: /path/to/documents
 
 # Document filters
---filter="pdf:pdftotext - -"
+--filter="pdf:pdftotext % -"
 --filter="docx,odt,epub,rtf:pandoc --wrap=preserve -t plain % -o -"
 --filter="html,htm:pandoc --wrap=preserve -f html -t plain % -o -"
 --filter="json:jq -r '.'"

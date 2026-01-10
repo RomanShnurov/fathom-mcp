@@ -13,6 +13,7 @@ server:
 search:
   context_lines: 5
   max_results: 50
+  max_file_size_mb: 100
   timeout_seconds: 30
 
 # Optional: exclude patterns
@@ -28,7 +29,7 @@ formats:
   # === Existing formats ===
   pdf:
     enabled: true
-    filter: "pdftotext - -"
+    filter: "pdftotext % -"
     extensions: [".pdf"]
   markdown:
     enabled: true
@@ -98,13 +99,13 @@ limits:
   max_concurrent_searches: 4
   max_document_read_chars: 100000
 
-# Optional: performance settings (Phase 2 enhancements)
+# Optional: performance settings
 performance:
   # File indexing for faster searches on large collections
   enable_indexing: false               # Enable document indexing
   index_update_strategy: "auto"        # auto | manual | scheduled
   index_formats: [".pdf", ".md", ".txt"]  # File formats to include in index
-  index_path: ".FMCP_index"             # Index storage path (relative to knowledge root)
+  index_path: ".fkm_index"             # Index storage path (relative to knowledge root)
   rebuild_index_on_startup: false      # Rebuild index when server starts
 
   # File watching for automatic index updates
@@ -119,7 +120,7 @@ performance:
   enable_parallel_pdf: true            # Process PDF pages in parallel
   max_pdf_workers: 4                   # Maximum parallel workers for PDFs
 
-# Optional: security settings (Phase 1 enhancements)
+# Optional: security settings
 security:
   # Filter command security
   enable_shell_filters: true
@@ -129,7 +130,7 @@ security:
   # Add full paths or command names that should be allowed
   allowed_filter_commands:
     - "pdftotext"
-    - "pdftotext - -"
+    - "pdftotext % -"
     - "pandoc"
     - "/usr/bin/pdftotext"
     - "/usr/local/bin/pdftotext"
@@ -148,9 +149,93 @@ security:
   restrict_to_knowledge_root: true  # Prevent path traversal attacks
   follow_symlinks: false            # Disallow following symbolic links
 
-# Environment variable overrides:
-# All settings can be overridden using environment variables with FMCP_ prefix
-# Examples:
+# ============================================================================
+# Transport Configuration
+# ============================================================================
+# Configure the MCP server transport protocol.
+# Default: stdio (for Claude Desktop compatibility)
+
+transport:
+  # Transport type: stdio | streamable-http
+  type: "stdio"
+
+  # ----------------------------------------------------------------------------
+  # HTTP Settings (ignored for stdio transport)
+  # ----------------------------------------------------------------------------
+
+  # Server address
+  # - Use "127.0.0.1" for local development
+  # - Use "0.0.0.0" for Docker containers
+  host: "127.0.0.1"
+
+  # Server port (must be >= 1024 for non-root users)
+  port: 8765
+
+  # HTTP endpoints
+  base_path: "/mcp"                    # Streamable HTTP endpoint
+  healthcheck_endpoint: "/_health"     # Health check endpoint
+
+  # ----------------------------------------------------------------------------
+  # CORS Security (CRITICAL)
+  # ----------------------------------------------------------------------------
+  # ⚠️  WARNING: NEVER use wildcard (*) in production!
+
+  enable_cors: false
+  allowed_origins: []
+  # Production example:
+  # allowed_origins:
+  #   - "https://app.example.com"
+  #   - "https://admin.example.com"
+
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "OPTIONS"
+
+  allowed_headers:
+    - "Content-Type"
+
+  max_age: 600  # CORS preflight cache duration in seconds (default: 10 minutes)
+
+  # ----------------------------------------------------------------------------
+  # HTTP Limits & Timeouts
+  # ----------------------------------------------------------------------------
+
+  limits:
+    max_request_body_size: 10485760    # 10 MB
+    max_concurrent_connections: 100
+    connection_timeout: 60
+    read_timeout: 300                  # 5 minutes for long operations
+    write_timeout: 60
+    keepalive_timeout: 5
+
+  # ----------------------------------------------------------------------------
+  # Logging
+  # ----------------------------------------------------------------------------
+
+  log_level: "INFO"                    # DEBUG | INFO | WARNING | ERROR
+  structured_logging: false            # Enable JSON logs for production
+  access_log: true                     # Log HTTP requests
+  reload: false                        # Auto-reload (development only)
+
+# ============================================================================
+# Environment Variables
+# ============================================================================
+# All settings can be overridden via environment variables with FMCP_ prefix:
+#
+# Transport examples:
+#   FMCP_TRANSPORT__TYPE=streamable-http
+#   FMCP_TRANSPORT__HOST=0.0.0.0
+#   FMCP_TRANSPORT__PORT=8765
+#   FMCP_TRANSPORT__ENABLE_CORS=true
+#   FMCP_TRANSPORT__ALLOWED_ORIGINS='["https://app.example.com"]'
+#   FMCP_TRANSPORT__STRUCTURED_LOGGING=true
+#
+# Healthcheck examples (for Docker):
+#   FMCP_HEALTHCHECK_TIMEOUT=2.5           # HTTP request timeout in seconds
+#   FMCP_HEALTHCHECK_VERBOSE=true          # Enable verbose healthcheck logging
+#
+# Other examples:
 #   FMCP_KNOWLEDGE__ROOT=/path/to/docs
 #   FMCP_SECURITY__ENABLE_SHELL_FILTERS=false
 #   FMCP_SECURITY__FILTER_SECURITY_MODE=disabled
@@ -158,3 +243,5 @@ security:
 #   FMCP_PERFORMANCE__ENABLE_INDEXING=true
 #   FMCP_PERFORMANCE__ENABLE_FILE_WATCHING=true
 #   FMCP_PERFORMANCE__ENABLE_PARALLEL_PDF=false
+#
+# Note: Use double underscore (__) for nested fields

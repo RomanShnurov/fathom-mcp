@@ -4,6 +4,18 @@ from enum import Enum
 from typing import Any
 
 
+class ErrorCategory(str, Enum):
+    """Error categories for HTTP status code mapping.
+
+    Used by HTTP transport to map MCP errors to appropriate HTTP responses.
+    """
+
+    CLIENT_ERROR = "client_error"  # 4xx - Client mistake
+    SERVER_ERROR = "server_error"  # 5xx - Server problem
+    TRANSIENT_ERROR = "transient"  # Temporary, retry-able
+    FATAL_ERROR = "fatal"  # Permanent, non-retry-able
+
+
 class ErrorCode(str, Enum):
     """Error codes following JSON-RPC conventions."""
 
@@ -37,17 +49,34 @@ class ErrorCode(str, Enum):
 
 
 class McpError(Exception):
-    """Base error with MCP-compatible response."""
+    """Base MCP error with HTTP status code mapping.
+
+    Adds HTTP status mapping and retry-ability indicator.
+
+    Attributes:
+        code: Error code (e.g., ErrorCode.DOCUMENT_NOT_FOUND)
+        message: Human-readable error message
+        category: Error category for HTTP mapping
+        http_status: HTTP status code (for HTTP transport)
+        retry_able: Whether error is transient and retry-able
+        data: Additional error data
+    """
 
     def __init__(
         self,
         code: ErrorCode,
         message: str,
         data: dict[str, Any] | None = None,
+        category: ErrorCategory = ErrorCategory.SERVER_ERROR,
+        http_status: int = 500,
+        retry_able: bool = False,
     ):
         self.code = code
         self.message = message
         self.data = data or {}
+        self.category = category
+        self.http_status = http_status
+        self.retry_able = retry_able
         super().__init__(message)
 
     def to_response(self) -> dict[str, Any]:
@@ -60,6 +89,19 @@ class McpError(Exception):
             }
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert error to dictionary for JSON serialization.
+
+        Returns:
+            Dict with error details
+        """
+        return {
+            "code": self.code.value,
+            "message": self.message,
+            "category": self.category.value,
+            "retry_able": self.retry_able,
+        }
+
 
 # Convenience factory functions
 def path_not_found(path: str) -> McpError:
@@ -67,6 +109,9 @@ def path_not_found(path: str) -> McpError:
         code=ErrorCode.PATH_NOT_FOUND,
         message=f"Path not found: {path}",
         data={"path": path},
+        category=ErrorCategory.CLIENT_ERROR,
+        http_status=404,
+        retry_able=False,
     )
 
 
@@ -75,6 +120,9 @@ def document_not_found(path: str, suggestions: list[str] | None = None) -> McpEr
         code=ErrorCode.DOCUMENT_NOT_FOUND,
         message=f"Document not found: {path}",
         data={"path": path, "suggestions": suggestions or []},
+        category=ErrorCategory.CLIENT_ERROR,
+        http_status=404,
+        retry_able=False,
     )
 
 
@@ -83,6 +131,9 @@ def search_timeout(query: str, timeout_sec: int) -> McpError:
         code=ErrorCode.SEARCH_TIMEOUT,
         message=f"Search timed out after {timeout_sec}s",
         data={"query": query, "timeout_seconds": timeout_sec},
+        category=ErrorCategory.TRANSIENT_ERROR,
+        http_status=504,
+        retry_able=True,
     )
 
 
@@ -108,6 +159,9 @@ def collection_not_found(path: str) -> McpError:
         code=ErrorCode.COLLECTION_NOT_FOUND,
         message=f"Collection not found: {path}",
         data={"path": path},
+        category=ErrorCategory.CLIENT_ERROR,
+        http_status=404,
+        retry_able=False,
     )
 
 
@@ -148,6 +202,9 @@ def filter_timeout(filename: str, timeout_seconds: int) -> McpError:
         ErrorCode.FILTER_TIMEOUT,
         f"Filter timeout reading {filename} (>{timeout_seconds}s)",
         data={"filename": filename, "timeout_seconds": timeout_seconds},
+        category=ErrorCategory.TRANSIENT_ERROR,
+        http_status=504,
+        retry_able=True,
     )
 
 
@@ -157,4 +214,7 @@ def filter_execution_error(filename: str, filter_cmd: str, error: str) -> McpErr
         ErrorCode.FILTER_EXECUTION_ERROR,
         f"Filter failed for {filename}: {filter_cmd} - {error}",
         data={"filename": filename, "filter_cmd": filter_cmd, "error": error},
+        category=ErrorCategory.SERVER_ERROR,
+        http_status=500,
+        retry_able=False,
     )

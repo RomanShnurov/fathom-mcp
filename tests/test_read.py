@@ -44,7 +44,7 @@ async def test_read_document_truncation(config):
 
 
 # ============================================================================
-# Phase 2: Document Info Tests (get_document_info)
+# Document Info Tests (get_document_info)
 # ============================================================================
 
 

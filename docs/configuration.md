@@ -62,7 +62,7 @@ server:
 formats:
   pdf:
     enabled: true
-    filter: "pdftotext - -"  # Shell command for text extraction
+    filter: "pdftotext % -"  # Shell command for text extraction
     extensions:              # File extensions for this format
       - ".pdf"
 
@@ -125,7 +125,7 @@ security:
 
   # Whitelist of allowed filter commands (recommended)
   allowed_filter_commands:
-    - "pdftotext - -"
+    - "pdftotext % -"
     - "pandoc -f docx -t plain"
     - "pandoc -f epub -t plain"
     - "pandoc -f html -t plain"
@@ -174,7 +174,7 @@ Each format is a key with these options:
 ```yaml
 # PDF using pdftotext
 pdf:
-  filter: "pdftotext - -"
+  filter: "pdftotext % -"
 
 # DOCX using pandoc
 docx:
@@ -289,7 +289,7 @@ knowledge:
 formats:
   pdf:
     enabled: true
-    filter: "pdftotext - -"
+    filter: "pdftotext % -"
     extensions: [".pdf"]
 
   docx:
@@ -310,7 +310,7 @@ formats:
 security:
   filter_mode: "whitelist"
   allowed_filter_commands:
-    - "pdftotext - -"
+    - "pdftotext % -"
     - "pandoc -f docx -t plain"
     - "pandoc -f html -t plain"
 ```

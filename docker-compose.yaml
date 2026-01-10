@@ -1,19 +1,142 @@
+# Docker Compose configuration for Fathom MCP
+# Usage:
+#   stdio:  docker compose --profile stdio up
+#   http:   docker compose --profile http up fathom-mcp-http
+#   all:    docker compose --profile stdio --profile http up
+
 services:
-  fathom-mcp:
+  # Stdio transport (default for Claude Desktop)
+  fathom-mcp-stdio:
+    profiles: ["stdio"]
     build:
       context: .
+      dockerfile: Dockerfile
     image: fathom-mcp:latest
+    container_name: fathom-mcp-stdio
+
     volumes:
       # Mount documents as read-only for security
       - ./documents:/knowledge:ro
       - ./config.yaml:/config/config.yaml:ro
+
     # For MCP stdio communication
     stdin_open: true
     tty: true
 
-    # Optional: Resource limits
+    environment:
+      - FMCP_KNOWLEDGE__ROOT=/knowledge
+      - FMCP_TRANSPORT__TYPE=stdio
+      - FMCP_SERVER__LOG_LEVEL=INFO
+
+    # Resource limits
     deploy:
       resources:
+        reservations:
+          memory: 128M
+          cpus: '0.25'
         limits:
           memory: 512M
           cpus: '1.0'
+
+  # Streamable HTTP transport
+  fathom-mcp-http:
+    profiles: ["http"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fathom-mcp:latest
+    container_name: fathom-mcp-http
+
+    volumes:
+      - ./documents:/knowledge:ro
+
+    ports:
+      - "8765:8765"
+
+    # Command override to skip config file
+    command: ["--root", "/knowledge"]
+
+    environment:
+      - FMCP_KNOWLEDGE__ROOT=/knowledge
+      - FMCP_TRANSPORT__TYPE=streamable-http
+      - FMCP_TRANSPORT__HOST=0.0.0.0
+      - FMCP_TRANSPORT__PORT=8765
+      - FMCP_TRANSPORT__BASE_PATH=/mcp
+      - FMCP_TRANSPORT__HEALTHCHECK_ENDPOINT=/_health
+      - FMCP_TRANSPORT__ENABLE_CORS=true
+      - FMCP_TRANSPORT__ALLOWED_ORIGINS=["*"]  # WARNING: Dev only!
+      - FMCP_TRANSPORT__STRUCTURED_LOGGING=true
+      - FMCP_TRANSPORT__ACCESS_LOG=true
+      - FMCP_SERVER__LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+
+    # Resource limits
+    deploy:
+      resources:
+        # Soft limits (guaranteed)
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+        # Hard limits (maximum)
+        limits:
+          memory: 1G      # Increased for large PDF processing
+          cpus: '2.0'     # Increased for parallel search
+
+    healthcheck:
+      test: ["CMD", "python", "/usr/local/bin/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped
+
+  # HTTP transport for local VS Code (localhost only)
+  fathom-mcp-http-local:
+    profiles: ["http-local"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fathom-mcp:latest
+    container_name: fathom-mcp-http-local
+
+    volumes:
+      - ./documents:/knowledge:ro
+
+    ports:
+      - "127.0.0.1:8765:8765"  # Only bind to localhost
+
+    # Command override to skip config file
+    command: ["--root", "/knowledge"]
+
+    environment:
+      - FMCP_KNOWLEDGE__ROOT=/knowledge
+      - FMCP_TRANSPORT__TYPE=streamable-http
+      - FMCP_TRANSPORT__HOST=0.0.0.0  # Listen on all interfaces inside container
+      - FMCP_TRANSPORT__PORT=8765
+      - FMCP_TRANSPORT__BASE_PATH=/mcp
+      - FMCP_TRANSPORT__HEALTHCHECK_ENDPOINT=/_health
+      - FMCP_TRANSPORT__ENABLE_CORS=true
+      - FMCP_TRANSPORT__ALLOWED_ORIGINS=["http://localhost:*","http://127.0.0.1:*"]
+      - FMCP_TRANSPORT__STRUCTURED_LOGGING=true  # Human-readable for dev
+      - FMCP_TRANSPORT__ACCESS_LOG=true
+      - FMCP_SERVER__LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+    deploy:
+      resources:
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+        limits:
+          memory: 1G
+          cpus: '2.0'
+
+    healthcheck:
+      test: ["CMD", "python", "/usr/local/bin/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped

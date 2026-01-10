@@ -1,5 +1,7 @@
 """MCP Server setup and lifecycle."""
 
+import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass
 
@@ -51,15 +53,17 @@ async def create_server(config: Config) -> Server:
     total_count = len(validation_results)
     logger.info(f"Filter tools validated: {enabled_count}/{total_count} formats available")
 
-    # Generate .ugrep config only if filters are available
+    # Log configured filters (no file generation needed - filters are built programmatically)
     if config.needs_document_filters():
-        try:
-            ugrep_path = config.write_ugrep_config()
-            logger.info(f"Generated .ugrep config: {ugrep_path}")
-        except Exception as e:
-            logger.warning(f"Failed to generate .ugrep config: {e}")
+        from .search.filter_builder import FilterArgumentsBuilder
+
+        builder = FilterArgumentsBuilder(config)
+        logger.info("Document filters configured:")
+        for line in builder.get_filter_summary().split("\n")[1:]:  # Skip header
+            if line.strip() and line.strip() != "(none)":
+                logger.info(line)
     else:
-        logger.info("No document filters enabled, skipping .ugrep config generation")
+        logger.info("No document filters enabled")
 
     # Register tools, resources, and prompts
     register_all_tools(server, config)
@@ -135,28 +139,125 @@ async def _cleanup_performance_features() -> None:
 
 
 async def run_server(config: Config) -> None:
-    """Run server with stdio transport.
+    """Run server with configured transport.
+
+    Supports stdio (default) and Streamable HTTP.
 
     Args:
         config: Server configuration
     """
     server = await create_server(config)
 
-    # Initialize performance features
-    await _initialize_performance_features(config)
-
-    logger.info("Starting MCP server on stdio...")
+    # Initialize performance features for stdio
+    if config.transport.type == "stdio":
+        await _initialize_performance_features(config)
 
     try:
-        async with stdio_server() as (read_stream, write_stream):
-            await server.run(
-                read_stream,
-                write_stream,
-                server.create_initialization_options(),
-            )
+        if config.transport.type == "stdio":
+            await _run_stdio_transport(server, config)
+        else:
+            await _run_http_transport(server, config)
     finally:
-        # Cleanup on shutdown
-        await _cleanup_performance_features()
+        # Cleanup for stdio (HTTP handled by lifecycle manager)
+        if config.transport.type == "stdio":
+            await _cleanup_performance_features()
+
+
+async def _run_stdio_transport(server: Server, config: Config) -> None:
+    """Run server with stdio transport (existing implementation).
+
+    Args:
+        server: MCP server instance
+        config: Server configuration
+    """
+    logger.info("Starting MCP server on stdio...")
+
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options(),
+        )
+
+
+async def _run_http_transport(server: Server, config: Config) -> None:
+    """Run server with HTTP transport and graceful shutdown.
+
+    Implements graceful shutdown for Docker.
+
+    Args:
+        server: MCP server instance
+        config: Server configuration
+    """
+    import signal
+    from typing import Any
+
+    import uvicorn
+
+    from fathom_mcp.transports import create_http_app
+
+    logger.info(
+        f"Starting MCP server with {config.transport.type} transport "
+        f"at {config.transport.host}:{config.transport.port}"
+    )
+
+    # Additional security reminder for production deployments
+    if config.transport.host == "0.0.0.0":
+        logger.info(
+            "Security reminder: Server is accessible from network. "
+            "Ensure reverse proxy or VPN is configured. "
+            "See docs/security.md"
+        )
+
+    app = await create_http_app(server, config)
+
+    uvicorn_config = uvicorn.Config(
+        app,
+        host=config.transport.host,
+        port=config.transport.port,
+        log_level=config.transport.log_level.lower(),
+        access_log=config.transport.access_log,
+        reload=config.transport.reload,
+        # Graceful shutdown settings
+        timeout_keep_alive=5,
+        timeout_graceful_shutdown=30,
+    )
+
+    uvicorn_server = uvicorn.Server(uvicorn_config)
+
+    # Setup signal handlers for graceful shutdown
+    shutdown_event = asyncio.Event()
+
+    def handle_signal(sig: int, frame: Any) -> None:
+        logger.info(f"Received signal {sig}, starting graceful shutdown...")
+        shutdown_event.set()
+
+    # Register signal handlers (cross-platform)
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    # Run server with shutdown monitoring
+    server_task = asyncio.create_task(uvicorn_server.serve())
+    shutdown_task = asyncio.create_task(shutdown_event.wait())
+
+    try:
+        # Wait for either server to finish or shutdown signal
+        done, pending = await asyncio.wait(
+            {server_task, shutdown_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if shutdown_event.is_set():
+            logger.info("Shutdown signal received, stopping server...")
+            uvicorn_server.should_exit = True
+            await server_task  # Wait for graceful shutdown
+
+    finally:
+        # Cancel pending tasks
+        for task in pending:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 def get_document_index() -> DocumentIndex | None:

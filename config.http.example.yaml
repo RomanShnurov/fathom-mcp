@@ -1,0 +1,43 @@
+# Configuration for Streamable HTTP transport
+#
+# EXAMPLE CONFIGURATION FILE - Not used by docker-compose.http.yaml
+# Docker setup uses environment variables instead.
+#
+# Local usage: fathom-mcp --config config.http.yaml
+
+knowledge:
+  root: "/knowledge"  # Docker volume mount
+
+transport:
+  type: "streamable-http"
+  host: "0.0.0.0"
+  port: 8765
+  base_path: "/mcp"
+  healthcheck_endpoint: "/_health"
+
+  # CORS (development only)
+  enable_cors: true
+  allowed_origins:
+    - "*"  # ⚠️ WARNING: Only for development!
+
+  # Logging
+  structured_logging: true  # JSON logs for production
+  access_log: true
+  log_level: "INFO"
+
+server:
+  log_level: "INFO"
+
+# Rest of config same as defaults
+
+# ============================================================================
+# Docker Healthcheck Configuration
+# ============================================================================
+# The healthcheck script uses these environment variables:
+#   FMCP_TRANSPORT__TYPE - Transport type (stdio, streamable-http)
+#   FMCP_TRANSPORT__PORT - Server port for HTTP transport (default: 8765)
+#   FMCP_TRANSPORT__HEALTHCHECK_ENDPOINT - Health endpoint (default: /_health)
+#   FMCP_HEALTHCHECK_TIMEOUT - HTTP timeout in seconds (default: 2.5)
+#   FMCP_HEALTHCHECK_VERBOSE - Enable verbose logging (default: false)
+#
+# These can be set in docker-compose.yaml or passed to docker run

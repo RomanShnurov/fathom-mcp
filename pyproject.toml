@@ -37,6 +37,10 @@ dependencies = [
     "pydantic-settings>=2.0",
     "pypdf>=4.0",
     "pyyaml>=6.0",
+    # HTTP transport dependencies
+    "uvicorn>=0.27.0",
+    "starlette>=0.36.0",
+    "httpx>=0.26.0",  # For test client
 ]
 
 [project.optional-dependencies]
@@ -59,6 +63,7 @@ inspector = [
 
 [project.scripts]
 fathom-mcp = "fathom_mcp.__main__:main"
+fathom-mcp-test = "fathom_mcp.cli.test_client:main"
 
 [project.urls]
 Homepage = "https://github.com/RomanShnurov/fathom-mcp"

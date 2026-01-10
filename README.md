@@ -426,6 +426,110 @@ When developing or running from source:
 
 **Important:** Restart Claude Desktop after modifying the configuration file.
 
+## HTTP Transport Support
+
+Fathom MCP supports two transport protocols for different deployment scenarios:
+
+### 1. Stdio Transport (Default)
+
+For Claude Desktop integration - the server communicates over standard input/output:
+
+```json
+{
+  "mcpServers": {
+    "fathom-mcp": {
+      "command": "fathom-mcp",
+      "args": ["--root", "/path/to/your/documents"]
+    }
+  }
+}
+```
+
+**Docker (optional):**
+```bash
+# Run stdio transport in Docker
+docker compose --profile stdio up
+```
+
+### 2. HTTP Transport (Docker)
+
+For remote deployment and web clients - the server runs as an HTTP service.
+
+#### Streamable HTTP:
+
+```bash
+# Start server
+docker compose --profile http up fathom-mcp-http
+
+# Test connectivity
+fathom-mcp-test -t streamable-http -u http://localhost:8765/mcp -l basic
+```
+
+### Configuration
+
+HTTP transport configured via environment variables or config file:
+
+**Environment variables:**
+```bash
+export FMCP_TRANSPORT__TYPE=streamable-http
+export FMCP_TRANSPORT__HOST=0.0.0.0
+export FMCP_TRANSPORT__PORT=8765
+export FMCP_TRANSPORT__ENABLE_CORS=true
+export FMCP_TRANSPORT__ALLOWED_ORIGINS='["https://app.example.com"]'
+```
+
+**Configuration file:**
+```yaml
+transport:
+  type: "streamable-http"
+  host: "0.0.0.0"
+  port: 8765
+  enable_cors: true
+  allowed_origins:
+    - "https://app.example.com"
+  structured_logging: true
+```
+
+### Security
+
+⚠️ **IMPORTANT: No Built-In Authentication**
+
+**Fathom MCP does NOT include authentication for HTTP transport.** This is intentional - authentication should be handled by dedicated tools.
+
+**For HTTP deployments:**
+- ✅ **Use reverse proxy** (Nginx, Caddy, Traefik) with authentication
+- ✅ **Use VPN** (Tailscale, WireGuard) for network isolation
+- ✅ **Use HTTPS** in production (never HTTP)
+- ❌ **Never expose** HTTP transport directly to the internet
+- ❌ **Never use** wildcard CORS (`*`) in production
+
+**For local use:** Use the default `stdio` transport - no network access, no authentication needed.
+
+**See [docs/security.md](docs/security.md) for detailed security setup with examples for reverse proxy, VPN, and OAuth.**
+
+### Testing
+
+Test client available for all transports:
+
+```bash
+# Connectivity test
+fathom-mcp-test -t streamable-http -u http://localhost:8765/mcp -l connectivity
+
+# Basic test suite
+fathom-mcp-test -t streamable-http -u http://localhost:8765/mcp -l basic
+
+# Full test suite with verbose output
+fathom-mcp-test -t streamable-http -u http://localhost:8765/mcp -l full -v
+```
+
+**Exit codes:**
+- 0: All tests passed
+- 1: Some tests failed
+- 2: Fatal error (cannot connect)
+- 3: Configuration error
+- 4: Timeout error
+- 6: Partial success (connectivity OK, tools failed)
+
 ## Docker Deployment
 
 ### Using docker-compose (Recommended)
@@ -538,7 +642,18 @@ uv run mypy src
 
 ## Security
 
-The File Knowledge server implements defense-in-depth security:
+The File Knowledge server implements defense-in-depth security.
+
+### Transport Security
+
+⚠️ **HTTP Transport Security:** When using HTTP transport (`streamable-http`), the server does NOT include built-in authentication. This is intentional - use external tools:
+
+- **Reverse proxy** (Nginx, Caddy, Traefik) with basic auth or OAuth
+- **VPN** (Tailscale, WireGuard) for network isolation
+- **localhost only** (`host: 127.0.0.1`) for same-machine access
+- **stdio transport** (default) for local AI agents like Claude Desktop
+
+**📖 See [docs/security.md](docs/security.md) for complete setup guides with configuration examples.**
 
 ### Path Security
 - **Path validation**: All file paths validated against knowledge root
@@ -557,9 +672,11 @@ security:
   enable_shell_filters: true
   filter_mode: whitelist          # Recommended for production
   allowed_filter_commands:
-    - "pdftotext - -"
+    - "pdftotext % -"
   symlink_policy: disallow        # Prevent symlink attacks
 ```
+
+**For production HTTP deployments, always use reverse proxy or VPN. See [docs/security.md](docs/security.md).**
 
 ## Debugging
 
@@ -616,6 +733,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Resources
 
+### Documentation
+- [Security Guide](docs/security.md) - Reverse proxy, VPN, and OAuth setup
+- [Supported Formats](docs/supported-formats.md) - Document format configuration
+- [Cloud Sync Guide](docs/cloud-sync-guide.md) - Cloud storage integration
+- [Integration Guide](docs/integration.md) - Client setup and deployment
+- [Configuration Reference](docs/configuration.md) - All configuration options
+- [Tools Reference](docs/tools.md) - Complete MCP tools documentation
+
+### External Resources
 - [Model Context Protocol](https://modelcontextprotocol.io/) - Official MCP documentation
 - [MCP Specification](https://spec.modelcontextprotocol.io/) - Protocol specification
 - [ugrep](https://github.com/Genivia/ugrep) - Ultra-fast grep with boolean search

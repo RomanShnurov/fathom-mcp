@@ -135,9 +135,6 @@ async def test_search_multiformat_real(test_documents) -> None:
     config.formats["html"].enabled = True
     config.formats["json"].enabled = True
 
-    # Generate .ugrep config
-    config.write_ugrep_config()
-
     # Create search engine
     engine = UgrepEngine(config)
 
@@ -167,7 +164,6 @@ async def test_boolean_search_multiformat(test_documents) -> None:
     config.formats["word_docx"].enabled = True
     config.formats["html"].enabled = True
 
-    config.write_ugrep_config()
     engine = UgrepEngine(config)
 
     # Boolean AND query

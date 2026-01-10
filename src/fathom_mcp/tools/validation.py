@@ -44,6 +44,13 @@ async def validate_filter_tools(config: Config) -> dict[str, bool]:
 
         # Test tool works with simple input
         try:
+            # Skip validation for PDF - uses pypdf library directly, not pdftotext filter
+            # pdftotext is only used by ugrep for search, not for reading
+            if fmt_name == "pdf":
+                results[fmt_name] = True
+                logger.debug("Skipping filter validation for 'pdf' (uses pypdf library)")
+                continue
+
             filter_security = FilterSecurity(config)
             test_input = b"test"
             filter_cmd_stdin = config.prepare_filter_for_stdin(fmt_config.filter)

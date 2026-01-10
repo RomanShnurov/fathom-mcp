@@ -366,7 +366,7 @@ class Config(BaseSettings):
 ```python
 class SecurityConfig(BaseModel):
     allowed_filter_commands: list[str] = [
-        "pdftotext - -",
+        "pdftotext % -",
         "pandoc -f docx -t plain",
         "pandoc -f epub -t plain",  # Add this
     ]
@@ -405,11 +405,11 @@ from .security import FilterSecurity
 filter_security = FilterSecurity(config.security)
 
 # Validate command
-filter_security.validate_filter_command("pdftotext - -")
+filter_security.validate_filter_command("pdftotext % -")
 
 # Run securely
 result = await filter_security.run_secure_filter(
-    command="pdftotext - -",
+    command="pdftotext % -",
     input_data=pdf_bytes,
     timeout=30
 )

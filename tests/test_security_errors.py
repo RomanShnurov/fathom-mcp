@@ -98,7 +98,7 @@ class TestFilterSecurityErrors:
             knowledge=KnowledgeConfig(root=temp_knowledge_dir),
             security=SecurityConfig(
                 filter_security_mode="whitelist",
-                allowed_filter_commands=["pdftotext - -"],
+                allowed_filter_commands=["pdftotext % -"],
             ),
         )
         fs = FilterSecurity(config)
@@ -113,7 +113,7 @@ class TestFilterSecurityErrors:
             knowledge=KnowledgeConfig(root=temp_knowledge_dir),
             security=SecurityConfig(
                 filter_security_mode="whitelist",
-                allowed_filter_commands=["pdftotext - -"],
+                allowed_filter_commands=["pdftotext % -"],
             ),
         )
         fs = FilterSecurity(config)
