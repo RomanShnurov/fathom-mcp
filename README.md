@@ -1,6 +1,6 @@
 # Fathom MCP
 
-[![PyPI version](https://badge.fury.io/py/fathom-mcp.svg)](https://badge.fury.io/py/fathom-mcp)
+[![PyPI version](https://img.shields.io/pypi/v/fathom-mcp.svg)](https://pypi.org/project/fathom-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/fathom-mcp.svg)](https://pypi.org/project/fathom-mcp/)
 [![Tests and Quality](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/tests-and-quality.yaml/badge.svg)](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/tests-and-quality.yaml)
 [![Integration - Document Formats](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/integration-formats.yaml/badge.svg)](https://github.com/RomanShnurov/fathom-mcp/actions/workflows/integration-formats.yaml)
